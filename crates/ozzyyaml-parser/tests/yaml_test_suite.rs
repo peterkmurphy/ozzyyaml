@@ -135,3 +135,43 @@ fn allowlisted_cases_match_expected_events() {
 
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// Prints IDs of top-level suite cases (in.yaml + test.event, no `error` marker) whose
+/// rendered events exactly match. Use to find candidates for `suite_allowlist.txt`.
+#[test]
+#[ignore = "manual discovery"]
+fn discover_passing_suite_cases() {
+    let root = suite_root();
+    let mut ids: Vec<String> = std::fs::read_dir(&root)
+        .expect("suite root")
+        .filter_map(Result::ok)
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    ids.sort();
+
+    let mut passing = Vec::new();
+    for id in ids {
+        let dir = root.join(&id);
+        if dir.join("error").exists() {
+            continue;
+        }
+        let (Ok(input), Ok(ev)) = (
+            std::fs::read_to_string(dir.join("in.yaml")),
+            std::fs::read_to_string(dir.join("test.event")),
+        ) else {
+            continue;
+        };
+        let expected: Vec<String> = ev.lines().map(String::from).collect();
+        let result = std::panic::catch_unwind(|| parse_str(&input).map(|e| render(&e)));
+        if let Ok(Ok(actual)) = result {
+            if actual == expected {
+                passing.push(id);
+            }
+        }
+    }
+    println!("PASSING_COUNT={}", passing.len());
+    for id in &passing {
+        println!("PASS {id}");
+    }
+}
