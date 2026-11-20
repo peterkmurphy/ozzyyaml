@@ -20,6 +20,12 @@ pub(crate) enum Token {
     DocumentEnd {
         mark: Mark,
     },
+    /// A `%NAME arg…` directive line (e.g. `%YAML 1.2`, `%TAG ! prefix`).
+    Directive {
+        name: String,
+        args: Vec<String>,
+        mark: Mark,
+    },
     /// Indent-aware start of a block sequence.
     BlockSequenceStart {
         mark: Mark,

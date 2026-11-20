@@ -8,6 +8,7 @@ use crate::reader::Reader;
 use crate::token::Token;
 
 mod block;
+mod document;
 mod flow;
 mod scalar;
 #[cfg(test)]
@@ -22,11 +23,12 @@ struct PossibleKey {
 
 /// Converts characters from a [`Reader`] into [`Token`]s.
 ///
-/// Recognises plain/quoted scalars, anchors, aliases, and block collections
+/// Recognises plain/quoted scalars, anchors, aliases, tags, `%` directives,
+/// `---` / `...` document markers, and block collections
 /// (`- ` entries and single-line simple `key: value` pairs) and flow
 /// collections (`[...]`, `{...}`). Indentation is tracked so
 /// `BlockSequenceStart` / `BlockMappingStart` / `BlockEnd` tokens are emitted;
-/// inside flow collections indentation is ignored. Tags, block scalars,
+/// inside flow collections indentation is ignored. Block scalars,
 /// multi-line plain scalars and complex or flow-collection keys are not yet
 /// supported.
 #[derive(Debug)]
@@ -94,10 +96,16 @@ impl<'a> Scanner<'a> {
             self.done = true;
             return Ok(());
         };
+        if let Some(marker) = self.document_marker(mark) {
+            self.fetch_document_marker(marker, mark);
+            return Ok(());
+        }
         if self.flow_level == 0 {
             self.unroll_indent(mark.column, mark);
         }
         match c {
+            '%' if mark.column == 1 && self.flow_level == 0 => self.fetch_directive(mark),
+            '!' => self.fetch_tag(mark)?,
             '[' | '{' => self.fetch_flow_collection_start(c, mark),
             ']' | '}' => self.fetch_flow_collection_end(c, mark)?,
             ',' if self.flow_level > 0 => self.fetch_flow_entry(mark),

@@ -12,20 +12,38 @@ impl Parser<'_> {
         Ok(Some(event))
     }
 
-    /// Parses one node (optionally anchored). When `allow_empty` is set, a
-    /// missing node yields an empty plain scalar.
-    pub(super) fn parse_node(&mut self, allow_empty: bool) -> Result<Event> {
-        let anchor = match self.peek()? {
-            Some(Token::Anchor { .. }) => match self.bump() {
-                Some(Token::Anchor { name, .. }) => Some(name),
-                _ => unreachable!("peeked an anchor"),
-            },
-            _ => None,
-        };
-        match self.peek()? {
-            Some(Token::Alias { .. }) if anchor.is_some() => {
-                Err(unexpected_or_eof(self.peeked.as_ref()))
+    /// Parses an optional anchor and tag, in either order.
+    fn parse_properties(&mut self) -> Result<(Option<String>, Option<String>)> {
+        let (mut anchor, mut tag) = (None, None);
+        loop {
+            match self.peek()? {
+                Some(Token::Anchor { .. }) if anchor.is_none() => {
+                    if let Some(Token::Anchor { name, .. }) = self.bump() {
+                        anchor = Some(name);
+                    }
+                }
+                Some(Token::Tag { .. }) if tag.is_none() => {
+                    if let Some(Token::Tag {
+                        handle,
+                        suffix,
+                        mark,
+                    }) = self.bump()
+                    {
+                        tag = Some(self.resolve_tag(&handle, &suffix, mark)?);
+                    }
+                }
+                _ => return Ok((anchor, tag)),
             }
+        }
+    }
+
+    /// Parses one node (optionally anchored/tagged). When `allow_empty` is
+    /// set, a missing node yields an empty plain scalar.
+    pub(super) fn parse_node(&mut self, allow_empty: bool) -> Result<Event> {
+        let (anchor, tag) = self.parse_properties()?;
+        let has_props = anchor.is_some() || tag.is_some();
+        match self.peek()? {
+            Some(Token::Alias { .. }) if has_props => Err(unexpected_or_eof(self.peeked.as_ref())),
             Some(Token::Alias { .. }) => match self.bump() {
                 Some(Token::Alias { name, .. }) => Ok(Event::Alias { anchor: name }),
                 _ => unreachable!("peeked an alias"),
@@ -33,7 +51,7 @@ impl Parser<'_> {
             Some(Token::Scalar { .. }) => match self.bump() {
                 Some(Token::Scalar { value, style, .. }) => Ok(Event::Scalar {
                     anchor,
-                    tag: None,
+                    tag,
                     value,
                     style,
                 }),
@@ -44,7 +62,7 @@ impl Parser<'_> {
                 self.start_collection(State::BlockSequenceEntry, mark)?;
                 Ok(Event::SequenceStart {
                     anchor,
-                    tag: None,
+                    tag,
                     flow: false,
                 })
             }
@@ -53,7 +71,7 @@ impl Parser<'_> {
                 self.start_collection(State::BlockMappingKey, mark)?;
                 Ok(Event::MappingStart {
                     anchor,
-                    tag: None,
+                    tag,
                     flow: false,
                 })
             }
@@ -62,7 +80,7 @@ impl Parser<'_> {
                 self.start_collection(State::FlowSequenceFirst, mark)?;
                 Ok(Event::SequenceStart {
                     anchor,
-                    tag: None,
+                    tag,
                     flow: true,
                 })
             }
@@ -71,7 +89,7 @@ impl Parser<'_> {
                 self.start_collection(State::FlowMappingFirst, mark)?;
                 Ok(Event::MappingStart {
                     anchor,
-                    tag: None,
+                    tag,
                     flow: true,
                 })
             }
@@ -80,10 +98,11 @@ impl Parser<'_> {
             | Some(Token::FlowEntry { .. })
             | Some(Token::FlowSequenceEnd { .. })
             | Some(Token::FlowMappingEnd { .. })
+            | Some(Token::DocumentStart { .. } | Token::DocumentEnd { .. })
             | None
-                if allow_empty || anchor.is_some() =>
+                if allow_empty || has_props =>
             {
-                Ok(empty_scalar(anchor))
+                Ok(empty_scalar(anchor, tag))
             }
             other => Err(unexpected_or_eof(other)),
         }
@@ -115,10 +134,10 @@ impl Parser<'_> {
     }
 }
 
-pub(super) fn empty_scalar(anchor: Option<String>) -> Event {
+pub(super) fn empty_scalar(anchor: Option<String>, tag: Option<String>) -> Event {
     Event::Scalar {
         anchor,
-        tag: None,
+        tag,
         value: String::new(),
         style: ScalarStyle::Plain,
     }
@@ -144,6 +163,7 @@ pub(super) fn unexpected(token: &Token) -> Error {
         | Token::StreamEnd { mark }
         | Token::DocumentStart { mark }
         | Token::DocumentEnd { mark }
+        | Token::Directive { mark, .. }
         | Token::BlockSequenceStart { mark }
         | Token::BlockMappingStart { mark }
         | Token::BlockEnd { mark }

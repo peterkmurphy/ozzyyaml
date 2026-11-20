@@ -193,3 +193,35 @@ fn invalid_double_quote_escape_is_scan_error() {
     let err = scanner(r#""\q""#).next_token().unwrap_err();
     assert!(matches!(err, Error::Scan { .. }));
 }
+
+#[test]
+fn scans_tag_forms() {
+    let tags = |input: &str| match scanner(input).next_token().unwrap().unwrap() {
+        Token::Tag { handle, suffix, .. } => (handle, suffix),
+        other => panic!("expected tag, got {other:?}"),
+    };
+    assert_eq!(tags("!!str"), ("!!".into(), "str".into()));
+    assert_eq!(tags("!e!foo"), ("!e!".into(), "foo".into()));
+    assert_eq!(tags("!foo"), ("!".into(), "foo".into()));
+    assert_eq!(tags("!"), ("!".into(), "".into()));
+    assert_eq!(tags("!<tag:x,1:y>"), ("".into(), "tag:x,1:y".into()));
+}
+
+#[test]
+fn scans_document_markers_and_directives() {
+    let mut s = scanner("%YAML 1.2\n---\na\n...\n");
+    assert!(matches!(
+        s.next_token().unwrap(),
+        Some(Token::Directive { name, args, .. }) if name == "YAML" && args == ["1.2"]
+    ));
+    assert!(matches!(
+        s.next_token().unwrap(),
+        Some(Token::DocumentStart { .. })
+    ));
+    assert_eq!(scalar(&mut s), ("a".into(), ScalarStyle::Plain));
+    assert!(matches!(
+        s.next_token().unwrap(),
+        Some(Token::DocumentEnd { .. })
+    ));
+    assert_eq!(s.next_token().unwrap(), None);
+}

@@ -5,12 +5,13 @@ use crate::reader::Reader;
 use crate::scanner::Scanner;
 use crate::token::Token;
 
+mod document;
 mod flow;
 mod node;
 #[cfg(test)]
 mod tests;
 
-use node::{empty_scalar, unexpected, unexpected_or_eof};
+use node::{empty_scalar, unexpected_or_eof};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -36,9 +37,10 @@ enum State {
 
 /// Pull parser that turns YAML text into a stream of [`Event`]s.
 ///
-/// Supports a single implicit document whose root is a scalar, alias, or a
-/// block or flow sequence/mapping (with anchors). Tags and multiple documents
-/// are not supported yet.
+/// Supports multi-document streams (implicit or explicit `---` / `...`),
+/// `%YAML` / `%TAG` directives, and nodes that are scalars, aliases, or block
+/// or flow sequences/mappings, each with optional anchors and tags. Tags are
+/// resolved to their full string on the emitted events.
 #[derive(Debug)]
 pub struct Parser<'a> {
     scanner: Scanner<'a>,
@@ -47,6 +49,8 @@ pub struct Parser<'a> {
     /// Continuation states of enclosing collections.
     stack: Vec<State>,
     peeked: Option<Token>,
+    /// `%TAG` directives (handle, prefix) of the current document.
+    tag_directives: Vec<(String, String)>,
 }
 
 impl<'a> Parser<'a> {
@@ -64,6 +68,7 @@ impl<'a> Parser<'a> {
             state: State::StreamStart,
             stack: Vec::new(),
             peeked: None,
+            tag_directives: Vec::new(),
         })
     }
 
@@ -85,27 +90,9 @@ impl<'a> Parser<'a> {
                 self.state = State::DocumentStart;
                 Ok(Some(Event::StreamStart))
             }
-            State::DocumentStart => {
-                if self.peek()?.is_none() {
-                    self.state = State::StreamEnd;
-                    return self.next_event();
-                }
-                self.state = State::DocumentContent;
-                Ok(Some(Event::DocumentStart { explicit: false }))
-            }
-            State::DocumentContent => {
-                self.state = State::DocumentEnd;
-                self.parse_node(false).map(Some)
-            }
-            State::DocumentEnd => {
-                if let Some(extra) = self.peek()? {
-                    let err = unexpected(extra);
-                    self.state = State::Done;
-                    return Err(err);
-                }
-                self.state = State::StreamEnd;
-                Ok(Some(Event::DocumentEnd { explicit: false }))
-            }
+            State::DocumentStart => self.next_document_start(),
+            State::DocumentContent => self.next_document_content(),
+            State::DocumentEnd => self.next_document_end(),
             State::BlockSequenceEntry => match self.peek()? {
                 Some(Token::BlockEntry { .. }) => {
                     self.bump();
@@ -135,7 +122,7 @@ impl<'a> Parser<'a> {
                     self.bump();
                     self.parse_node(true).map(Some)
                 } else {
-                    Ok(Some(empty_scalar(None)))
+                    Ok(Some(empty_scalar(None, None)))
                 }
             }
             State::FlowSequenceFirst => self.next_flow_sequence_entry(true),
@@ -150,7 +137,7 @@ impl<'a> Parser<'a> {
                     self.bump();
                     self.parse_node(true).map(Some)
                 } else {
-                    Ok(Some(empty_scalar(None)))
+                    Ok(Some(empty_scalar(None, None)))
                 }
             }
             State::FlowPairEnd => self.end_collection(Event::MappingEnd),
@@ -162,7 +149,7 @@ impl<'a> Parser<'a> {
                     self.bump();
                     self.parse_node(true).map(Some)
                 } else {
-                    Ok(Some(empty_scalar(None)))
+                    Ok(Some(empty_scalar(None, None)))
                 }
             }
             State::StreamEnd => {
