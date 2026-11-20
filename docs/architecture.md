@@ -2,17 +2,21 @@
 
 ozzyyaml is a YAML **1.2.2** stack. `ozzyyaml-parser` produces the event stream.
 `ozzyyaml` composes those events into an `Rc`-shared Core-schema `Value`.
+`ozzyyaml-emit` writes that graph back to YAML text.
 
 ```
 &str / &[u8]
   → Reader → Scanner → Parser (events)
   → Composer (ozzyyaml) → Rc-shared Value (Core schema)
+  → Emitter (ozzyyaml-emit) → YAML text
 ```
 
 Internals (`Reader`, `Scanner`, `Token`) stay crate-private. The parser's public
 surface is `Parser` / `parse_str`, `Event`, `Limits`, `Error` / `Mark`. The
 composer crate exposes `from_str` / `load_all` / `from_slice*` (and the
-`*_with_limits` variants), plus `Value`, `Limits`, and `Error`.
+`*_with_limits` variants), plus `Value`, `Limits`, and `Error`. The emitter
+exposes `to_string` / `to_string_with_options`, `dump_all` /
+`dump_all_with_options`, `EmitOptions` / `EmitStyle`, and `Error`.
 
 ## Reader
 
@@ -105,3 +109,26 @@ sat unmerged for years: [libyaml#132](https://github.com/yaml/libyaml/issues/132
 ozzyyaml accepts Unicode anchors on purpose (`&汉`, `*😀`, …). That is a
 primary motivation for a from-scratch parser rather than wrapping or forking
 libyaml. Acceptance tests live in `crates/ozzyyaml-parser/tests/unicode_anchors.rs`.
+
+## Emitter
+
+`ozzyyaml-emit` walks a composed `Value` and writes YAML 1.2.2 text. Dumping
+is value-level, so comments, tags, and the original layout are not preserved.
+
+**Flow is the default** (`[1, 2]`, `{k: v}`). Pass
+`EmitOptions { style: EmitStyle::Block }` for **block** collections
+(`- ` items and `key:` entries). One style applies to the whole tree.
+
+Shared nodes are anchored by **`Rc` identity**, not by value equality. A node
+reachable more than once, including a cycle, is written once with a generated
+anchor (`&a`, `&b`, …) and later visits are aliases (`*a`). The writer accepts
+any Unicode anchor name; generated names are ASCII. Equal but distinct nodes
+are not merged.
+
+`dump_all` emits a stream and resets the anchor map for each document, so
+names restart at `a` and an `Rc` shared across documents is written in full in
+each one.
+
+- More than one document: every document, including the first, is prefixed with `---\n`.
+- One document: the same text as `to_string` (no `---`).
+- An empty slice: an empty string.
