@@ -1,10 +1,10 @@
 //! Plain, single-quoted and double-quoted scalar scanning.
 
 use super::{scan_error, unterminated, Scanner};
+use crate::chars::is_flow_indicator;
 use crate::error::Result;
 use crate::mark::Mark;
 
-#[allow(dead_code)]
 impl Scanner<'_> {
     /// Reads a single-line plain scalar, stopping at a newline, ` #` comment or
     /// `:` indicator (and, in flow context, `,[]{}`).
@@ -12,7 +12,7 @@ impl Scanner<'_> {
         let mut value = String::new();
         while let Some(c) = self.reader.peek() {
             let starts_comment = matches!(self.reader.peek2(), Some((' ' | '\t', '#')));
-            let flow_stop = self.flow_level > 0 && matches!(c, ',' | '[' | ']' | '{' | '}');
+            let flow_stop = self.flow_level > 0 && is_flow_indicator(c);
             let is_value = c == ':' && self.is_plain_value_indicator();
             if c == '\n' || starts_comment || flow_stop || is_value {
                 break;
@@ -29,7 +29,10 @@ impl Scanner<'_> {
     fn is_plain_value_indicator(&self) -> bool {
         self.indicator_followed_by_blank()
             || (self.flow_level > 0
-                && matches!(self.reader.peek2(), Some((_, ',' | '[' | ']' | '{' | '}'))))
+                && self
+                    .reader
+                    .peek2()
+                    .is_some_and(|(_, next)| is_flow_indicator(next)))
     }
 
     pub(super) fn scan_single_quoted(&mut self, start: Mark) -> Result<String> {

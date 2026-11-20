@@ -125,6 +125,19 @@ fn empty_anchor_name_is_scan_error() {
 }
 
 #[test]
+fn anchor_name_stops_before_quoted_scalar() {
+    assert_eq!(kinds("&a \"q\""), ["&a", "S:q"]);
+}
+
+#[test]
+fn anchor_glued_to_quote_is_scan_error() {
+    assert!(matches!(
+        scanner("&a\"q\"").next_token(),
+        Err(Error::Scan { .. })
+    ));
+}
+
+#[test]
 fn scans_block_mapping_tokens() {
     assert_eq!(
         kinds("a: 1\nb: &x 2\n"),

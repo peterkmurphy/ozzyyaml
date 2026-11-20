@@ -5,7 +5,6 @@ use crate::error::Result;
 use crate::mark::Mark;
 use crate::token::Token;
 
-#[allow(dead_code)]
 impl Scanner<'_> {
     pub(super) fn save_possible_key(&mut self, mark: Mark) {
         if self.possible_key.is_none() {

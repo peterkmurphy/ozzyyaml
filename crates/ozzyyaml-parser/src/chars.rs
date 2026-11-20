@@ -13,10 +13,13 @@ pub(crate) fn is_flow_indicator(c: char) -> bool {
     matches!(c, ',' | '[' | ']' | '{' | '}')
 }
 
-/// `ns-anchor-char`: a non-space printable character that is not a flow
-/// indicator. Unlike libyaml, this deliberately includes non-ASCII characters.
+/// `ns-anchor-char` for practical node boundaries: non-space printable, not a
+/// flow indicator, and not `"`, `'`, or `#` (those start quoted scalars /
+/// comments). Unlike libyaml, this deliberately includes non-ASCII characters.
 pub(crate) fn is_anchor_char(c: char) -> bool {
-    is_printable(c) && !matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{85}') && !is_flow_indicator(c)
+    is_printable(c)
+        && !matches!(c, ' ' | '\t' | '\n' | '\r' | '\u{85}' | '"' | '\'' | '#')
+        && !is_flow_indicator(c)
 }
 
 #[cfg(test)]
@@ -29,7 +32,7 @@ mod tests {
             assert!(is_anchor_char(c), "{c:?}");
         }
         for c in [
-            ' ', '\t', '\n', ',', '[', ']', '{', '}', '\u{FEFF}', '\u{0}',
+            ' ', '\t', '\n', ',', '[', ']', '{', '}', '"', '\'', '#', '\u{FEFF}', '\u{0}',
         ] {
             assert!(!is_anchor_char(c), "{c:?}");
         }

@@ -32,7 +32,6 @@ struct PossibleKey {
 /// multi-line plain scalars and complex or flow-collection keys are not yet
 /// supported.
 #[derive(Debug)]
-#[allow(dead_code)] // consumed by the parser in a later task
 pub(crate) struct Scanner<'a> {
     reader: Reader<'a>,
     queue: VecDeque<Token>,
@@ -50,7 +49,6 @@ pub(crate) struct Scanner<'a> {
     done: bool,
 }
 
-#[allow(dead_code)]
 impl<'a> Scanner<'a> {
     pub fn new(reader: Reader<'a>) -> Self {
         Self {
@@ -94,6 +92,7 @@ impl<'a> Scanner<'a> {
             self.possible_key = None;
         }
         let Some(c) = self.reader.peek() else {
+            debug_assert!(self.reader.is_eof());
             self.unroll_indent(0, mark);
             self.possible_key = None;
             self.done = true;
@@ -164,6 +163,18 @@ impl<'a> Scanner<'a> {
                 mark,
             ));
         }
+        // Properties must be separated from the following node content.
+        if let Some(c) = self.reader.peek() {
+            let ok = matches!(c, ' ' | '\t' | '\n')
+                || crate::chars::is_flow_indicator(c)
+                || (c == ':' && self.is_value_indicator(self.reader.mark()));
+            if !ok {
+                return Err(scan_error(
+                    "expected whitespace after anchor/alias name".into(),
+                    self.reader.mark(),
+                ));
+            }
+        }
         self.queue.push_back(if indicator == '&' {
             Token::Anchor { name, mark }
         } else {
@@ -191,12 +202,10 @@ impl<'a> Scanner<'a> {
     }
 }
 
-#[allow(dead_code)]
 fn unterminated(kind: &str, mark: Mark) -> Error {
     scan_error(format!("unterminated {kind} scalar"), mark)
 }
 
-#[allow(dead_code)]
 fn scan_error(message: String, mark: Mark) -> Error {
     Error::Scan { message, mark }
 }

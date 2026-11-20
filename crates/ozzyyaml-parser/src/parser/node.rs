@@ -8,7 +8,10 @@ use crate::token::Token;
 
 impl Parser<'_> {
     pub(super) fn end_collection(&mut self, event: Event) -> Result<Option<Event>> {
-        self.state = self.stack.pop().expect("collection state has a parent");
+        self.state = self.stack.pop().ok_or_else(|| Error::Parse {
+            message: "internal error: collection stack underflow".into(),
+            mark: Mark::default(),
+        })?;
         Ok(Some(event))
     }
 
@@ -46,7 +49,7 @@ impl Parser<'_> {
             Some(Token::Alias { .. }) if has_props => Err(unexpected_or_eof(self.peeked.as_ref())),
             Some(Token::Alias { .. }) => match self.bump() {
                 Some(Token::Alias { name, .. }) => Ok(Event::Alias { anchor: name }),
-                _ => unreachable!("peeked an alias"),
+                other => Err(unexpected_or_eof(other.as_ref())),
             },
             Some(Token::Scalar { .. }) => match self.bump() {
                 Some(Token::Scalar { value, style, .. }) => Ok(Event::Scalar {
@@ -55,10 +58,10 @@ impl Parser<'_> {
                     value,
                     style,
                 }),
-                _ => unreachable!("peeked a scalar"),
+                other => Err(unexpected_or_eof(other.as_ref())),
             },
             Some(Token::BlockSequenceStart { .. }) => {
-                let mark = self.bump_mark();
+                let mark = self.bump_mark()?;
                 self.start_collection(State::BlockSequenceEntry, mark)?;
                 Ok(Event::SequenceStart {
                     anchor,
@@ -67,7 +70,7 @@ impl Parser<'_> {
                 })
             }
             Some(Token::BlockMappingStart { .. }) => {
-                let mark = self.bump_mark();
+                let mark = self.bump_mark()?;
                 self.start_collection(State::BlockMappingKey, mark)?;
                 Ok(Event::MappingStart {
                     anchor,
@@ -76,7 +79,7 @@ impl Parser<'_> {
                 })
             }
             Some(Token::FlowSequenceStart { .. }) => {
-                let mark = self.bump_mark();
+                let mark = self.bump_mark()?;
                 self.start_collection(State::FlowSequenceFirst, mark)?;
                 Ok(Event::SequenceStart {
                     anchor,
@@ -85,7 +88,7 @@ impl Parser<'_> {
                 })
             }
             Some(Token::FlowMappingStart { .. }) => {
-                let mark = self.bump_mark();
+                let mark = self.bump_mark()?;
                 self.start_collection(State::FlowMappingFirst, mark)?;
                 Ok(Event::MappingStart {
                     anchor,
@@ -108,15 +111,15 @@ impl Parser<'_> {
         }
     }
 
-    pub(super) fn bump_mark(&mut self) -> Mark {
+    pub(super) fn bump_mark(&mut self) -> Result<Mark> {
         match self.bump() {
             Some(
-                Token::BlockSequenceStart { mark }
-                | Token::BlockMappingStart { mark }
-                | Token::FlowSequenceStart { mark }
-                | Token::FlowMappingStart { mark },
-            ) => mark,
-            _ => unreachable!("peeked a collection start"),
+                token @ (Token::BlockSequenceStart { .. }
+                | Token::BlockMappingStart { .. }
+                | Token::FlowSequenceStart { .. }
+                | Token::FlowMappingStart { .. }),
+            ) => Ok(token.mark()),
+            other => Err(unexpected_or_eof(other.as_ref())),
         }
     }
 
@@ -158,30 +161,8 @@ pub(super) fn unexpected_or_eof(token: Option<&Token>) -> Error {
 }
 
 pub(super) fn unexpected(token: &Token) -> Error {
-    let mark = match token {
-        Token::StreamStart { mark }
-        | Token::StreamEnd { mark }
-        | Token::DocumentStart { mark }
-        | Token::DocumentEnd { mark }
-        | Token::Directive { mark, .. }
-        | Token::BlockSequenceStart { mark }
-        | Token::BlockMappingStart { mark }
-        | Token::BlockEnd { mark }
-        | Token::FlowSequenceStart { mark }
-        | Token::FlowSequenceEnd { mark }
-        | Token::FlowMappingStart { mark }
-        | Token::FlowMappingEnd { mark }
-        | Token::BlockEntry { mark }
-        | Token::FlowEntry { mark }
-        | Token::Key { mark }
-        | Token::Value { mark }
-        | Token::Anchor { mark, .. }
-        | Token::Alias { mark, .. }
-        | Token::Tag { mark, .. }
-        | Token::Scalar { mark, .. } => *mark,
-    };
     Error::Parse {
         message: "unexpected token".into(),
-        mark,
+        mark: token.mark(),
     }
 }

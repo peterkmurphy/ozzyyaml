@@ -6,7 +6,6 @@ use crate::error::Result;
 use crate::mark::Mark;
 use crate::token::Token;
 
-#[allow(dead_code)]
 impl Scanner<'_> {
     /// Returns the marker (`---` or `...`) at the reader position, if the
     /// reader is at column 1 outside flow context and the marker is followed

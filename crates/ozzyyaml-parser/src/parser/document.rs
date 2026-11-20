@@ -114,8 +114,9 @@ impl Parser<'_> {
 
     /// Expands a scanned tag (`handle` + `suffix`) to its full tag string.
     pub(super) fn resolve_tag(&self, handle: &str, suffix: &str, mark: Mark) -> Result<String> {
+        let suffix = percent_decode(suffix, mark)?;
         if handle.is_empty() {
-            return Ok(suffix.to_string()); // verbatim `!<…>`
+            return Ok(suffix); // verbatim `!<…>`
         }
         let declared = self.tag_directives.iter().find(|(h, _)| h == handle);
         let prefix = match (declared, handle) {
@@ -125,6 +126,40 @@ impl Parser<'_> {
             _ => return Err(parse_error("undeclared tag handle", mark)),
         };
         Ok(format!("{prefix}{suffix}"))
+    }
+}
+
+/// Decodes `%HH` octets in a tag URI/suffix (YAML 1.2 tag characters).
+fn percent_decode(input: &str, mark: Mark) -> Result<String> {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            if i + 2 >= bytes.len() {
+                return Err(parse_error("incomplete percent-escape in tag", mark));
+            }
+            let hi = hex_nibble(bytes[i + 1])
+                .ok_or_else(|| parse_error("invalid percent-escape in tag", mark))?;
+            let lo = hex_nibble(bytes[i + 2])
+                .ok_or_else(|| parse_error("invalid percent-escape in tag", mark))?;
+            out.push((hi << 4) | lo);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out)
+        .map_err(|_| parse_error("tag is not valid UTF-8 after percent-decode", mark))
+}
+
+fn hex_nibble(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
     }
 }
 

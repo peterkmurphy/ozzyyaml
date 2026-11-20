@@ -188,6 +188,15 @@ fn local_and_verbatim_tags() {
 }
 
 #[test]
+fn tag_suffix_percent_escapes_are_decoded() {
+    assert_eq!(parse("!<tag:%41> z")[2], tagged_scalar(Some("tag:A"), "z"));
+    assert_eq!(
+        parse("!!%73%74%72 v")[2],
+        tagged_scalar(Some("tag:yaml.org,2002:str"), "v")
+    );
+}
+
+#[test]
 fn tag_on_collections() {
     let evs = parse("!!map {a: b}");
     assert_eq!(

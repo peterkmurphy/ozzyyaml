@@ -1,11 +1,11 @@
 //! Flow collection tokens (`[`, `]`, `{`, `}`, `,`) and the `:` value indicator.
 
 use super::{scan_error, Scanner};
+use crate::chars::is_flow_indicator;
 use crate::error::Result;
 use crate::mark::Mark;
 use crate::token::Token;
 
-#[allow(dead_code)]
 impl Scanner<'_> {
     /// True if the `:` at the reader position is a value indicator.
     pub(super) fn is_value_indicator(&self, mark: Mark) -> bool {
@@ -14,7 +14,10 @@ impl Scanner<'_> {
         }
         self.flow_level > 0
             && (self.quoted_end == Some(mark.index)
-                || matches!(self.reader.peek2(), Some((_, ',' | '[' | ']' | '{' | '}'))))
+                || self
+                    .reader
+                    .peek2()
+                    .is_some_and(|(_, next)| is_flow_indicator(next)))
     }
 
     pub(super) fn fetch_flow_collection_start(&mut self, indicator: char, mark: Mark) {

@@ -11,6 +11,7 @@ pub(crate) struct Reader<'a> {
     column: u32,
 }
 
+/// YAML 1.2.2 §5.4 line breaks: `\r\n` and bare `\r` normalize to `\n`.
 fn next_logical_char(input: &str) -> Option<(char, usize)> {
     if input.starts_with("\r\n") {
         Some(('\n', 2))
@@ -23,7 +24,6 @@ fn next_logical_char(input: &str) -> Option<(char, usize)> {
     }
 }
 
-#[allow(dead_code)]
 impl<'a> Reader<'a> {
     /// Creates a reader, rejecting input that exceeds the configured byte limit.
     pub fn new(input: &'a str, limits: Limits) -> Result<Self> {
@@ -81,22 +81,23 @@ impl<'a> Reader<'a> {
         let (current, byte_len) = next_logical_char(self.rest())?;
         self.index += byte_len;
         if current == '\n' {
-            self.line += 1;
+            self.line = self.line.saturating_add(1);
             self.column = 1;
         } else {
-            self.column += 1;
+            self.column = self.column.saturating_add(1);
         }
         Some(current)
     }
 
-    /// Returns whether all input has been consumed.
-    pub fn is_eof(&self) -> bool {
-        self.index == self.input.len()
-    }
-
     /// Returns the unconsumed input.
     pub fn rest(&self) -> &'a str {
+        // `index` always sits on a UTF-8 boundary (BOM skip or scalar widths).
         &self.input[self.index..]
+    }
+
+    /// Returns whether all input has been consumed.
+    pub fn is_eof(&self) -> bool {
+        self.rest().is_empty()
     }
 }
 

@@ -6,14 +6,7 @@ use crate::mark::Mark;
 /// Each variant carries the source [`Mark`] where the token began. This shape
 /// is the Milestone A convention (not a `Token { kind, mark }` pair).
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub(crate) enum Token {
-    StreamStart {
-        mark: Mark,
-    },
-    StreamEnd {
-        mark: Mark,
-    },
     DocumentStart {
         mark: Mark,
     },
@@ -80,6 +73,32 @@ pub(crate) enum Token {
         style: ScalarStyle,
         mark: Mark,
     },
+}
+
+impl Token {
+    /// Source mark where this token began.
+    pub(crate) fn mark(&self) -> Mark {
+        match self {
+            Token::DocumentStart { mark }
+            | Token::DocumentEnd { mark }
+            | Token::Directive { mark, .. }
+            | Token::BlockSequenceStart { mark }
+            | Token::BlockMappingStart { mark }
+            | Token::BlockEnd { mark }
+            | Token::FlowSequenceStart { mark }
+            | Token::FlowSequenceEnd { mark }
+            | Token::FlowMappingStart { mark }
+            | Token::FlowMappingEnd { mark }
+            | Token::BlockEntry { mark }
+            | Token::FlowEntry { mark }
+            | Token::Key { mark }
+            | Token::Value { mark }
+            | Token::Anchor { mark, .. }
+            | Token::Alias { mark, .. }
+            | Token::Tag { mark, .. }
+            | Token::Scalar { mark, .. } => *mark,
+        }
+    }
 }
 
 #[cfg(test)]
