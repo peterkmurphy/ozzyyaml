@@ -93,15 +93,9 @@ jobs:
           path: python/dist
 
   macos:
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-13
-            target: x86_64
-          - runner: macos-latest
-            target: aarch64
+    # macos-13 (Intel) queues for hours on GitHub-hosted runners; ship
+    # Apple Silicon wheels for 0.1.0. Add x86_64 later if demand appears.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -110,7 +104,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.target }}
+          target: aarch64
           working-directory: python
           args: --release --out dist --interpreter ${{ env.MATURIN_INTERPRETERS }}
       - name: Smoke-test
@@ -123,7 +117,7 @@ jobs:
           pytest tests -q
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-macos-${{ matrix.target }}
+          name: wheels-macos-aarch64
           path: python/dist
 
   sdist:

@@ -30,9 +30,9 @@ git push origin v0.1.0
 ```
 
 The workflow builds manylinux (x86_64 + aarch64), Windows (x64), and macOS
-(x86_64 + aarch64) wheels plus an sdist, smoke-tests on the native runners,
-then uploads with Maturin. `workflow_dispatch` builds artifacts without
-uploading; only `v*` tags publish.
+(aarch64 / Apple Silicon) wheels plus an sdist, smoke-tests on the native
+runners, then uploads with Maturin. `workflow_dispatch` builds artifacts
+without uploading; only `v*` tags publish.
 
 ### Install from a checkout
 
