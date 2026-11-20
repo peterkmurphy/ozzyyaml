@@ -8,6 +8,7 @@ mod event;
 mod limits;
 mod mark;
 mod reader;
+mod scanner;
 mod token;
 
 pub use error::{Error, LimitKind, Result};
