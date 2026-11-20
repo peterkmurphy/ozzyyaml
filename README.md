@@ -31,5 +31,11 @@ cargo test
 # or: cargo test -p ozzyyaml-parser / cargo test -p ozzyyaml
 ```
 
+```rust
+use ozzyyaml::from_str;
+let v = from_str("k: v\n").unwrap();
+assert_eq!(v.as_mapping().unwrap()[0].1.as_str(), Some("v"));
+```
+
 CI checks format, clippy (`-D warnings`), and tests. Checkout must fetch
 submodules so the yaml-test-suite harness can run.

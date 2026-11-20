@@ -1,19 +1,18 @@
 # Architecture
 
-ozzyyaml is a YAML **1.2.2** stack. Milestone A (`ozzyyaml-parser`) stops at the
-event stream. Milestone B (`ozzyyaml`) will compose those events into a document
-graph.
+ozzyyaml is a YAML **1.2.2** stack. `ozzyyaml-parser` produces the event stream.
+`ozzyyaml` composes those events into an `Rc`-shared Core-schema `Value`.
 
 ```
 &str / &[u8]
-  → Reader   (encoding, BOM, position marks)
-  → Scanner  (tokens)
-  → Parser   (YAML 1.2.2 events)
-  → pull API / iterator of Event
+  → Reader → Scanner → Parser (events)
+  → Composer (ozzyyaml) → Rc-shared Value (Core schema)
 ```
 
-Internals (`Reader`, `Scanner`, `Token`) stay crate-private. The public surface
-is `Parser` / `parse_str`, `Event`, `Limits`, `Error` / `Mark`.
+Internals (`Reader`, `Scanner`, `Token`) stay crate-private. The parser's public
+surface is `Parser` / `parse_str`, `Event`, `Limits`, `Error` / `Mark`. The
+composer crate exposes `from_str` / `load_all` / `from_slice*` (and the
+`*_with_limits` variants), plus `Value`, `Limits`, and `Error`.
 
 ## Reader
 
@@ -51,30 +50,51 @@ tree and no schema typing at this layer.
 
 `parse_str` is a convenience that drains `next_event()` into a `Vec<Event>`.
 
-## Shared graph vs copy (Milestone B)
+`Parser::last_mark` is the source mark of the event most recently returned as
+`Ok(Some(_))`. Compose errors use that mark (`UndefinedAlias`,
+`DuplicateAnchor`, and anchor `LimitExceeded`). A parse error leaves
+`last_mark` unchanged.
+
+## Composer
+
+`ozzyyaml` pulls events and builds Core-schema `Value`s. Plain scalars are
+resolved by the Core schema; everything else stays a string.
+
+- `from_str` / `from_str_with_limits` — exactly one document
+- `load_all` / `load_all_with_limits` — every document in the stream
+- `from_slice` / `from_slice_with_limits` and `load_all_from_slice` /
+  `load_all_from_slice_with_limits` — the same loaders over `&[u8]`. Bytes are
+  checked as UTF-8 first; invalid input is `Error::InvalidUtf8`. The parser
+  itself still takes `&str`.
+
+An alias is an `Rc` clone of the anchored node. `max_anchors` is enforced when
+that anchor is registered, not while scanning events.
+
+## Shared graph vs copy
 
 Billion-laughs attacks are primarily **alias/anchor** related: a small document
 can name one node many times.
 
-Milestone B's composer must build a **shared** node graph (references / arena
-ids, not deep copies). An alias points at the same node as its anchor. That
-removes the classic memory blow-up from materializing duplicates.
+The composer builds a **shared** node graph (`Rc<Value>`, not deep copies). An
+alias points at the same node as its anchor. That removes the classic memory
+blow-up from materializing duplicates.
+
+Sequences and mappings store their children in `RefCell`. A collection is
+registered as an anchor before its children are filled, so cyclic aliases
+(`&a [*a]`) are representable.
 
 Flattening APIs (JSON export, deep owned trees) must be explicit and budgeted.
 They must not silently expand a DAG into exponential work.
-
-Milestone A only records anchor names on events. It does not resolve aliases or
-build nodes.
 
 ## `max_anchors`
 
 `Limits::max_anchors` (default 1_024) is the **primary DoS brake**. Nesting
 depth and input size are secondary caps.
 
-The field is on `Limits` in Milestone A for API stability (`LimitKind::Anchors`
-already exists). Enforcement belongs at **compose time** in Milestone B, when
-distinct anchors are actually registered on the graph. The event parser does
-not count or reject excess anchors.
+Enforcement is at **compose time**, when distinct anchors are registered on the
+graph. The event parser does not count or reject excess anchors. Crossing the
+limit returns `Error::LimitExceeded` (`LimitKind::Anchors`) positioned with
+`Parser::last_mark`.
 
 ## Unicode anchors
 
