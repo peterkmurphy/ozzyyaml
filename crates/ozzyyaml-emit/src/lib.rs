@@ -6,6 +6,7 @@
 mod emit;
 mod error;
 mod options;
+mod scalar;
 
 pub use emit::{dump_all, dump_all_with_options, to_string, to_string_with_options};
 pub use error::{Error, Result};
