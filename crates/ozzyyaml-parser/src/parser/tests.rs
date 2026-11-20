@@ -1,4 +1,4 @@
-use crate::{parse_str, Event};
+use crate::{parse_str, Event, Mark, Parser};
 
 #[test]
 fn parse_plain_scalar_document() {
@@ -46,4 +46,20 @@ fn next_event_returns_none_after_stream_end() {
     let mut p = crate::Parser::new("x").unwrap();
     while p.next_event().unwrap().is_some() {}
     assert_eq!(p.next_event().unwrap(), None);
+}
+
+#[test]
+fn last_mark_tracks_alias_position() {
+    // `&a x\n*a\n` is a second root node, so this parser returns a parse error
+    // and never emits Alias. A block sequence keeps that alias on line 2.
+    let mut p = Parser::new("- &a x\n- *a\n").unwrap();
+    assert_eq!(p.last_mark(), Mark::default());
+    while let Some(ev) = p.next_event().unwrap() {
+        if matches!(ev, Event::Alias { .. }) {
+            let m = p.last_mark();
+            assert!(m.line >= 2, "alias is on line 2, got {m}");
+            return;
+        }
+    }
+    panic!("expected Alias event");
 }

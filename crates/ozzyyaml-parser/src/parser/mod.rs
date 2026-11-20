@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::event::Event;
 use crate::limits::Limits;
+use crate::mark::Mark;
 use crate::reader::Reader;
 use crate::scanner::Scanner;
 use crate::token::Token;
@@ -51,6 +52,11 @@ pub struct Parser<'a> {
     peeked: Option<Token>,
     /// `%TAG` directives (handle, prefix) of the current document.
     tag_directives: Vec<(String, String)>,
+    /// Mark of the event most recently returned as `Ok(Some(_))`.
+    last_mark: Mark,
+    /// Mark of a token consumed while producing the event in progress.
+    /// Committed to `last_mark` only when that event is `Ok(Some(_))`.
+    pending_mark: Option<Mark>,
 }
 
 impl<'a> Parser<'a> {
@@ -69,6 +75,8 @@ impl<'a> Parser<'a> {
             stack: Vec::new(),
             peeked: None,
             tag_directives: Vec::new(),
+            last_mark: Mark::default(),
+            pending_mark: None,
         })
     }
 
@@ -80,20 +88,39 @@ impl<'a> Parser<'a> {
     }
 
     fn bump(&mut self) -> Option<Token> {
-        self.peeked.take()
+        let token = self.peeked.take()?;
+        // The scanner reads ahead, so the reader mark is not the token's mark.
+        self.pending_mark = Some(token.mark());
+        Some(token)
     }
 
     /// Returns the next event, or `None` after the final `StreamEnd`.
     ///
     /// After any `Err` the parser is fused: further calls return `Ok(None)`.
+    /// A successful event records [`Self::last_mark`]; an error leaves it unchanged.
     pub fn next_event(&mut self) -> Result<Option<Event>> {
+        self.pending_mark = None;
         let result = self.step();
-        if result.is_err() {
-            self.state = State::Done;
-            self.stack.clear();
-            self.peeked = None;
+        match &result {
+            Ok(Some(_)) => {
+                self.last_mark = self.pending_mark.unwrap_or_else(|| self.scanner.mark());
+            }
+            Ok(None) => {}
+            Err(_) => {
+                self.state = State::Done;
+                self.stack.clear();
+                self.peeked = None;
+            }
         }
         result
+    }
+
+    /// Mark of the event most recently returned by [`Self::next_event`] as `Ok(Some(_))`.
+    ///
+    /// [`Mark::default`] before any event. On `Err`, the previous mark is left
+    /// unchanged; the parse [`crate::Error`] already carries its own mark.
+    pub fn last_mark(&self) -> Mark {
+        self.last_mark
     }
 
     fn step(&mut self) -> Result<Option<Event>> {

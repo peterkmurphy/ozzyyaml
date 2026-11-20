@@ -64,6 +64,13 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    /// Returns the reader's current source position.
+    ///
+    /// This can be past the last token yielded, because scanning looks ahead.
+    pub(crate) fn mark(&self) -> Mark {
+        self.reader.mark()
+    }
+
     /// Returns the next token, or `None` once the input is exhausted.
     pub fn next_token(&mut self) -> Result<Option<Token>> {
         while self.need_more_tokens() {
