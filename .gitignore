@@ -1,8 +1,33 @@
-/target
+# Rust
+/target/
 Cargo.lock
+
+# Python / Maturin
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+*.so
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+wheelhouse/
+python/ozzyyaml/*.so
+**/maturin/
+
+# Editors / OS
 .idea/
 .vscode/
 *.swp
+*~
 .DS_Store
+
+# Local agent / worktrees
 .worktrees/
 .superpowers/
