@@ -1,0 +1,12 @@
+[package]
+name = "ozzyyaml-parser"
+description = "YAML 1.2.2 event parser (scan → parse → events)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror = "2"
