@@ -4,13 +4,26 @@ use crate::mark::Mark;
 
 /// UTF-8 input cursor with byte offsets and one-based source positions.
 #[derive(Debug)]
-pub struct Reader<'a> {
+pub(crate) struct Reader<'a> {
     input: &'a str,
     index: usize,
     line: u32,
     column: u32,
 }
 
+fn next_logical_char(input: &str) -> Option<(char, usize)> {
+    if input.starts_with("\r\n") {
+        Some(('\n', 2))
+    } else {
+        let current = input.chars().next()?;
+        Some((
+            if current == '\r' { '\n' } else { current },
+            current.len_utf8(),
+        ))
+    }
+}
+
+#[allow(dead_code)]
 impl<'a> Reader<'a> {
     /// Creates a reader, rejecting input that exceeds the configured byte limit.
     pub fn new(input: &'a str, limits: Limits) -> Result<Self> {
@@ -52,28 +65,21 @@ impl<'a> Reader<'a> {
 
     /// Returns the next character without consuming it.
     pub fn peek(&self) -> Option<char> {
-        self.rest().chars().next()
+        next_logical_char(self.rest()).map(|(current, _)| current)
     }
 
     /// Returns the next two characters without consuming them.
     pub fn peek2(&self) -> Option<(char, char)> {
-        let mut chars = self.rest().chars();
-        Some((chars.next()?, chars.next()?))
+        let rest = self.rest();
+        let (first, first_len) = next_logical_char(rest)?;
+        let (second, _) = next_logical_char(&rest[first_len..])?;
+        Some((first, second))
     }
 
     /// Consumes and returns the next character.
     pub fn bump(&mut self) -> Option<char> {
-        let current = self.peek()?;
-
-        // Normalize CRLF to one logical newline and consume both bytes at once.
-        if current == '\r' && self.rest().starts_with("\r\n") {
-            self.index += 2;
-            self.line += 1;
-            self.column = 1;
-            return Some('\n');
-        }
-
-        self.index += current.len_utf8();
+        let (current, byte_len) = next_logical_char(self.rest())?;
+        self.index += byte_len;
         if current == '\n' {
             self.line += 1;
             self.column = 1;
@@ -102,6 +108,14 @@ mod tests {
     #[test]
     fn strips_utf8_bom() {
         let mut r = Reader::new("\u{FEFF}a", Limits::default()).unwrap();
+        assert_eq!(
+            r.mark(),
+            Mark {
+                index: 3,
+                line: 1,
+                column: 1
+            }
+        );
         assert_eq!(r.bump(), Some('a'));
     }
 
@@ -120,6 +134,83 @@ mod tests {
         r.bump(); // newline
         assert_eq!(r.mark().line, 2);
         assert_eq!(r.mark().column, 1);
+    }
+
+    #[test]
+    fn normalizes_crlf() {
+        let mut r = Reader::new("\r\nx", Limits::default()).unwrap();
+        assert_eq!(r.peek(), Some('\n'));
+        assert_eq!(r.bump(), Some('\n'));
+        assert_eq!(
+            r.mark(),
+            Mark {
+                index: 2,
+                line: 2,
+                column: 1
+            }
+        );
+        assert_eq!(r.rest(), "x");
+    }
+
+    #[test]
+    fn normalizes_bare_carriage_return() {
+        let mut r = Reader::new("\rx", Limits::default()).unwrap();
+        assert_eq!(r.peek(), Some('\n'));
+        assert_eq!(r.bump(), Some('\n'));
+        assert_eq!(
+            r.mark(),
+            Mark {
+                index: 1,
+                line: 2,
+                column: 1
+            }
+        );
+    }
+
+    #[test]
+    fn peek_and_peek2_match_bump() {
+        let mut r = Reader::new("\r\n\r汉", Limits::default()).unwrap();
+        assert_eq!(r.peek(), Some('\n'));
+        assert_eq!(r.peek2(), Some(('\n', '\n')));
+        assert_eq!(r.bump(), Some('\n'));
+        assert_eq!(r.peek(), Some('\n'));
+        assert_eq!(r.peek2(), Some(('\n', '汉')));
+        assert_eq!(r.bump(), Some('\n'));
+        assert_eq!(r.peek(), Some('汉'));
+        assert_eq!(r.bump(), Some('汉'));
+        assert_eq!(r.peek(), None);
+        assert_eq!(r.peek2(), None);
+        assert_eq!(r.bump(), None);
+    }
+
+    #[test]
+    fn reports_eof() {
+        let mut r = Reader::new("a", Limits::default()).unwrap();
+        assert!(!r.is_eof());
+        r.bump();
+        assert!(r.is_eof());
+    }
+
+    #[test]
+    fn returns_unconsumed_input() {
+        let mut r = Reader::new("a汉", Limits::default()).unwrap();
+        assert_eq!(r.rest(), "a汉");
+        r.bump();
+        assert_eq!(r.rest(), "汉");
+    }
+
+    #[test]
+    fn advances_mark_by_utf8_bytes_and_one_column() {
+        let mut r = Reader::new("汉", Limits::default()).unwrap();
+        assert_eq!(r.bump(), Some('汉'));
+        assert_eq!(
+            r.mark(),
+            Mark {
+                index: 3,
+                line: 1,
+                column: 2
+            }
+        );
     }
 
     #[test]
