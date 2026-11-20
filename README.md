@@ -50,14 +50,18 @@ run.
 
 ## Python
 
-Bindings live under `python/` and are built with Maturin. They expose familiar
-`load` / `dump` helpers that return ordinary Python types:
+Bindings live under `python/` and are built with Maturin. Native helpers return
+ordinary Python types; the structured `Value` API preserves alias identity
+(including cycles):
 
 ```python
 import ozzyyaml
 
 assert ozzyyaml.load("[1, 2]\n") == [1, 2]
 print(ozzyyaml.dump({"a": True}))
+
+v = ozzyyaml.load_value("[&a x, *a]\n")
+assert v[0] is v[1]
 ```
 
 See [docs/python.md](docs/python.md) for install-from-checkout steps, limits,
@@ -69,8 +73,9 @@ CI builds and smoke-tests wheels.
 1. Event parser (`ozzyyaml-parser`) — done
 2. Compose + Core schema (`ozzyyaml`) — done
 3. Emit (`ozzyyaml-emit`) — done
-4. Python package (Maturin wheels; PyPI publish later) — in progress
-5. Optional later work: structured Python `Value` API, Serde, PyYAML-compat quirks
+4. Python package (Maturin wheels; PyPI publish later) — done (wheels in CI; no PyPI upload yet)
+5. Structured Python `Value` API — done
+6. Optional later work: Serde, PyYAML-compat quirks
 
 ## Learn more
 

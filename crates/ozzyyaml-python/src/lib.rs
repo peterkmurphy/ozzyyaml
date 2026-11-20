@@ -1,5 +1,7 @@
 //! PyO3 extension module for ozzyyaml (`ozzyyaml._native`).
 
+mod graph;
+
 use pyo3::create_exception;
 use pyo3::exceptions::{PyException, PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -12,7 +14,7 @@ use ozzyyaml_emit::{dump_all_with_options, to_string_with_options, EmitOptions, 
 
 create_exception!(ozzyyaml, OzzyYamlError, PyException);
 
-fn limits_from_kwargs(
+pub(crate) fn limits_from_kwargs(
     max_anchors: Option<usize>,
     max_nesting_depth: Option<usize>,
     max_input_bytes: Option<usize>,
@@ -30,8 +32,30 @@ fn limits_from_kwargs(
     limits
 }
 
-fn map_err(err: impl std::fmt::Display) -> PyErr {
+pub(crate) fn map_err(err: impl std::fmt::Display) -> PyErr {
     OzzyYamlError::new_err(err.to_string())
+}
+
+pub(crate) fn parse_style(style: &str) -> PyResult<EmitStyle> {
+    match style {
+        "flow" => Ok(EmitStyle::Flow),
+        "block" => Ok(EmitStyle::Block),
+        other => Err(PyValueError::new_err(format!(
+            "style must be 'flow' or 'block', got {other:?}"
+        ))),
+    }
+}
+
+pub(crate) fn input_to_str(stream: Bound<'_, PyAny>) -> PyResult<String> {
+    if let Ok(s) = stream.extract::<String>() {
+        return Ok(s);
+    }
+    if let Ok(bytes) = stream.extract::<Vec<u8>>() {
+        return std::str::from_utf8(&bytes)
+            .map(str::to_owned)
+            .map_err(|e| map_err(format!("invalid UTF-8 at byte {}", e.valid_up_to())));
+    }
+    Err(PyTypeError::new_err("stream must be str or bytes"))
 }
 
 fn value_to_py(
@@ -121,28 +145,6 @@ fn py_to_value(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
     )))
 }
 
-fn parse_style(style: &str) -> PyResult<EmitStyle> {
-    match style {
-        "flow" => Ok(EmitStyle::Flow),
-        "block" => Ok(EmitStyle::Block),
-        other => Err(PyValueError::new_err(format!(
-            "style must be 'flow' or 'block', got {other:?}"
-        ))),
-    }
-}
-
-fn input_to_str(stream: Bound<'_, PyAny>) -> PyResult<String> {
-    if let Ok(s) = stream.extract::<String>() {
-        return Ok(s);
-    }
-    if let Ok(bytes) = stream.extract::<Vec<u8>>() {
-        return std::str::from_utf8(&bytes)
-            .map(str::to_owned)
-            .map_err(|e| map_err(format!("invalid UTF-8 at byte {}", e.valid_up_to())));
-    }
-    Err(PyTypeError::new_err("stream must be str or bytes"))
-}
-
 #[pyfunction]
 #[pyo3(signature = (stream, *, max_anchors=None, max_nesting_depth=None, max_input_bytes=None))]
 fn load(
@@ -209,9 +211,13 @@ fn dump_all(docs: Bound<'_, PyAny>, style: &str) -> PyResult<String> {
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("OzzyYamlError", m.py().get_type::<OzzyYamlError>())?;
+    m.add_class::<graph::YamlValue>()?;
     m.add_function(wrap_pyfunction!(load, m)?)?;
     m.add_function(wrap_pyfunction!(load_all, m)?)?;
     m.add_function(wrap_pyfunction!(dump, m)?)?;
     m.add_function(wrap_pyfunction!(dump_all, m)?)?;
+    m.add_function(wrap_pyfunction!(graph::load_value, m)?)?;
+    m.add_function(wrap_pyfunction!(graph::load_all_value, m)?)?;
+    m.add_function(wrap_pyfunction!(graph::dump_value, m)?)?;
     Ok(())
 }
