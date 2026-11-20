@@ -2,43 +2,63 @@
 
 [![ci](https://github.com/peterkmurphy/ozzyyaml/actions/workflows/ci.yml/badge.svg)](https://github.com/peterkmurphy/ozzyyaml/actions/workflows/ci.yml)
 
-From-scratch YAML **1.2.2** stack (Rust-first, Python/PyPI later). BSD-3-Clause.
+ozzyyaml is a from-scratch **YAML 1.2.2** stack, written in Rust first, with
+Python bindings on the way. It is licensed under the BSD-3-Clause.
 
-Milestone A (`ozzyyaml-parser`) is the event layer. Milestone B (`ozzyyaml`)
-composes those events into `Rc`-shared Core-schema [`Value`] trees
-(`from_str` / `load_all`), including Unicode anchors and cyclic aliases.
-`ozzyyaml-emit` dumps those trees back to YAML text (`to_string` / `dump_all`).
+The project exists because common YAML stacks still struggle with parts of the
+1.2.2 spec that matter in real documents. In particular, **libyaml** (and
+therefore **PyYAML**) rejects Unicode characters in anchor and alias names,
+treating them as ASCII-only. A fix has sat unmerged for years
+([libyaml#132](https://github.com/yaml/libyaml/issues/132)). ozzyyaml accepts
+Unicode anchors on purpose (`&汉`, `*😀`, and similar).
 
-## Roadmap
+## What you get
 
-1. **ozzyyaml-parser** — events ✓
-2. **ozzyyaml** — compose + Core schema ✓
-3. **ozzyyaml-emit** — dump ✓
-4. **PyPI** — Maturin wheels
+The repository is a Cargo workspace with three main crates:
 
-Motivation: libyaml/PyYAML reject Unicode anchors/aliases; patches sat unmerged
-for years ([libyaml#132](https://github.com/yaml/libyaml/issues/132)).
+| Crate | Role |
+| --- | --- |
+| `ozzyyaml-parser` | Turns YAML text into a stream of parse events |
+| `ozzyyaml` | Builds those events into a shared document graph (`Value`) using the YAML 1.2.2 Core schema |
+| `ozzyyaml-emit` | Writes a `Value` graph back out as YAML text |
 
-See [docs/architecture.md](docs/architecture.md) for the Reader → Scanner →
-Parser → Compose → Emit pipeline and `max_anchors`. Design notes:
-`docs/superpowers/specs/2026-11-20-ozzyyaml-design.md`,
-`docs/superpowers/specs/2026-11-20-ozzyyaml-milestone-b-design.md`, and
-`docs/superpowers/specs/2026-11-20-ozzyyaml-emit-design.md`.
+Compose supports shared aliases (including cycles) via `Rc` identity.
+Emit can dump a single document or a multi-document stream, with flow style by
+default and optional block style.
 
-## Develop
+## Quick start (Rust)
 
 ```bash
 git submodule update --init --recursive
 cargo test
-# or: cargo test -p ozzyyaml-parser / cargo test -p ozzyyaml / cargo test -p ozzyyaml-emit
 ```
 
 ```rust
 use ozzyyaml::from_str;
 use ozzyyaml_emit::to_string;
-let v = from_str("[1, 2]\n").unwrap();
-let _yaml = to_string(&v).unwrap();
+
+fn main() {
+    let value = from_str("[1, 2]\n").unwrap();
+    let yaml = to_string(&value).unwrap();
+    println!("{yaml}");
+}
 ```
 
-CI checks format, clippy (`-D warnings`), and tests. Checkout must fetch
-submodules so the yaml-test-suite harness can run.
+CI runs `rustfmt`, Clippy with warnings denied, and the full workspace test
+suite. Checkouts must fetch Git submodules so the yaml-test-suite harness can
+run.
+
+## Roadmap
+
+1. Event parser (`ozzyyaml-parser`) — done
+2. Compose + Core schema (`ozzyyaml`) — done
+3. Emit (`ozzyyaml-emit`) — done
+4. Python package (Maturin / PyPI wheels) — in progress
+5. Optional later work: Serde, PyYAML-compat scalar quirks
+
+## Learn more
+
+- [Architecture overview](docs/architecture.md) — how the pipeline fits together
+- [Python guide](docs/python.md) — when the bindings are available
+- Design notes live under `docs/superpowers/specs/` for contributors who want
+  the detailed decision history

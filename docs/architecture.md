@@ -1,134 +1,142 @@
 # Architecture
 
-ozzyyaml is a YAML **1.2.2** stack. `ozzyyaml-parser` produces the event stream.
-`ozzyyaml` composes those events into an `Rc`-shared Core-schema `Value`.
-`ozzyyaml-emit` writes that graph back to YAML text.
+This document describes how ozzyyaml turns YAML text into structured data and
+back again. It is meant to be readable on its own; you do not need the agent
+planning docs to follow it.
+
+## Big picture
+
+ozzyyaml splits the work into clear stages:
 
 ```
-&str / &[u8]
-  → Reader → Scanner → Parser (events)
-  → Composer (ozzyyaml) → Rc-shared Value (Core schema)
-  → Emitter (ozzyyaml-emit) → YAML text
+YAML text (UTF-8)
+  → Reader        — bytes, line/column marks, size limit
+  → Scanner       — tokens (scalars, anchors, collection markers, …)
+  → Parser        — YAML 1.2.2 events
+  → Composer      — Core-schema Value graph (shared with Rc)
+  → Emitter       — YAML text again
 ```
 
-Internals (`Reader`, `Scanner`, `Token`) stay crate-private. The parser's public
-surface is `Parser` / `parse_str`, `Event`, `Limits`, `Error` / `Mark`. The
-composer crate exposes `from_str` / `load_all` / `from_slice*` (and the
-`*_with_limits` variants), plus `Value`, `Limits`, and `Error`. The emitter
-exposes `to_string` / `to_string_with_options`, `dump_all` /
-`dump_all_with_options`, `EmitOptions` / `EmitStyle`, and `Error`.
+Each stage lives in a focused crate or module. Lower layers stay private where
+possible so the public API stays small.
+
+| Layer | Crate | Public highlights |
+| --- | --- | --- |
+| Events | `ozzyyaml-parser` | `Parser`, `parse_str`, `Event`, `Limits`, `Error`, `Mark` |
+| Documents | `ozzyyaml` | `from_str` / `load_all` / `from_slice*`, `Value`, `Limits`, `Error` |
+| Dump | `ozzyyaml-emit` | `to_string` / `dump_all`, `EmitOptions`, `EmitStyle`, `Error` |
 
 ## Reader
 
-`Reader` is a UTF-8 cursor over the input. It:
+The reader is a UTF-8 cursor over the input string. It:
 
 - Rejects input longer than `Limits::max_input_bytes`
-- Skips a leading UTF-8 BOM (`U+FEFF`)
-- Normalizes `\r\n` and lone `\r` to a logical `\n`
-- Tracks a 1-based `Mark` (byte index, line, column) for errors
+- Skips a leading UTF-8 BOM if present
+- Normalizes `\r\n` and lone `\r` to a logical newline
+- Tracks a source position (`Mark`: byte index, 1-based line and column)
 
-It does not interpret YAML syntax.
+It does not understand YAML syntax. It only feeds characters to the scanner.
 
 ## Scanner
 
-`Scanner` turns characters into `Token`s: scalars, anchors, aliases, tags,
-directives, document markers (`---` / `...`), and collection structure
-(`BlockEntry`, `Key` / `Value`, flow `[` `{` `]` `}`, indent-aware
-`BlockSequenceStart` / `BlockMappingStart` / `BlockEnd`).
+The scanner turns characters into tokens: plain and quoted scalars, anchors,
+aliases, tags, directives, document markers (`---` / `...`), and collection
+structure (block `-` entries, `key:` / value indicators, flow `[` `{` `]` `}`,
+and indent-aware block start/end tokens).
 
-It keeps a token queue, an indent stack, and libyaml-style simple-key tracking
-(single-line in Milestone A). Indentation is ignored inside flow collections.
-
-Anchor and alias names use YAML 1.2.2 `ns-anchor-char` — printable, non-space,
-not a flow indicator — including non-ASCII. See [Unicode anchors](#unicode-anchors).
+Indentation matters in block style and is ignored inside flow collections.
+Anchor and alias names follow YAML 1.2.2 rules and may include non-ASCII
+characters. That is intentional; see [Unicode anchors](#unicode-anchors).
 
 ## Parser
 
-`Parser` is a pull state machine: `next_event()` consumes tokens and emits
-`Event`s (`StreamStart`/`End`, `DocumentStart`/`End`, `Scalar`, `Alias`,
-`SequenceStart`/`End`, `MappingStart`/`End`).
+The parser is a pull state machine. Call `next_event()` to receive events such
+as stream/document boundaries, scalars, aliases, and sequence/mapping
+start/end markers.
 
-Collection nesting is bounded by `Limits::max_nesting_depth`. `%TAG` handles
-are expanded to full tag strings on the emitted events. There is no document
-tree and no schema typing at this layer.
+Nesting depth is capped by `Limits::max_nesting_depth`. Tag handles from
+`%TAG` directives are expanded to full tag strings on the events. This layer
+does not build a document tree and does not apply a schema.
 
-`parse_str` is a convenience that drains `next_event()` into a `Vec<Event>`.
+`parse_str` drains the whole stream into a `Vec<Event>` for convenience.
 
-`Parser::last_mark` is the source mark of the event most recently returned as
-`Ok(Some(_))`. Compose errors use that mark (`UndefinedAlias`,
-`DuplicateAnchor`, and anchor `LimitExceeded`). A parse error leaves
-`last_mark` unchanged.
+`Parser::last_mark` records the source position of the most recent successful
+event. The composer uses that mark when reporting problems such as an undefined
+alias or a duplicate anchor.
 
 ## Composer
 
-`ozzyyaml` pulls events and builds Core-schema `Value`s. Plain scalars are
-resolved by the Core schema; everything else stays a string.
+`ozzyyaml` consumes parser events and builds `Value` trees using the YAML
+**1.2.2 Core schema**. Plain scalars become null, bool, int, float, or string
+according to Core rules. Quoted scalars stay strings unless an explicit Core
+tag says otherwise. Values such as `yes` / `no` / `on` / `off` remain strings
+under Core (they are not booleans).
 
-- `from_str` / `from_str_with_limits` — exactly one document
-- `load_all` / `load_all_with_limits` — every document in the stream
-- `from_slice` / `from_slice_with_limits` and `load_all_from_slice` /
-  `load_all_from_slice_with_limits` — the same loaders over `&[u8]`. Bytes are
-  checked as UTF-8 first; invalid input is `Error::InvalidUtf8`. The parser
-  itself still takes `&str`.
+Useful entry points:
 
-An alias is an `Rc` clone of the anchored node. `max_anchors` is enforced when
-that anchor is registered, not while scanning events.
+- `from_str` — exactly one document
+- `load_all` — every document in the stream
+- `from_slice` / `load_all_from_slice` — same loaders over bytes (UTF-8 checked
+  first)
 
-## Shared graph vs copy
+Each function has a `*_with_limits` variant.
 
-Billion-laughs attacks are primarily **alias/anchor** related: a small document
-can name one node many times.
+An alias is an `Rc` clone of the node that carried the matching anchor. The
+`max_anchors` limit is enforced when an anchor is registered during compose,
+not while the scanner is tokenizing.
 
-The composer builds a **shared** node graph (`Rc<Value>`, not deep copies). An
-alias points at the same node as its anchor. That removes the classic memory
-blow-up from materializing duplicates.
+## Shared graphs, aliases, and cycles
 
-Sequences and mappings store their children in `RefCell`. A collection is
-registered as an anchor before its children are filled, so cyclic aliases
-(`&a [*a]`) are representable.
+YAML aliases are a common source of “billion laughs” style attacks: a small
+document can name one node many times. ozzyyaml avoids the classic blow-up by
+**sharing** nodes instead of deep-copying them. An alias points at the same
+`Rc<Value>` as its anchor.
 
-Flattening APIs (JSON export, deep owned trees) must be explicit and budgeted.
-They must not silently expand a DAG into exponential work.
+Sequences and mappings store children behind a `RefCell` so a collection can be
+registered as an anchor before its children are filled. That makes cyclic
+structures such as `&a [*a]` representable.
 
-## `max_anchors`
+Anything that flattens a graph into a pure tree (for example some language
+bindings) must handle cycles explicitly. Silent expansion of a DAG into an
+exponential copy is not acceptable.
 
-`Limits::max_anchors` (default 1_024) is the **primary DoS brake**. Nesting
-depth and input size are secondary caps.
+## Resource limits
 
-Enforcement is at **compose time**, when distinct anchors are registered on the
-graph. The event parser does not count or reject excess anchors. Crossing the
-limit returns `Error::LimitExceeded` (`LimitKind::Anchors`) positioned with
-`Parser::last_mark`.
+`Limits` carries three caps, with conservative defaults:
+
+| Limit | Default role |
+| --- | --- |
+| `max_anchors` | Primary DoS brake (compose time) |
+| `max_nesting_depth` | Caps collection nesting (parse time) |
+| `max_input_bytes` | Caps raw input size (read time) |
+
+Crossing a limit returns a typed error rather than hanging or trying to
+allocate without bound.
 
 ## Unicode anchors
 
-YAML 1.2.2 allows non-ASCII characters in anchors and aliases. libyaml (and
-therefore PyYAML) rejects them, treating anchor names as ASCII. A patch has
-sat unmerged for years: [libyaml#132](https://github.com/yaml/libyaml/issues/132).
-
-ozzyyaml accepts Unicode anchors on purpose (`&汉`, `*😀`, …). That is a
-primary motivation for a from-scratch parser rather than wrapping or forking
-libyaml. Acceptance tests live in `crates/ozzyyaml-parser/tests/unicode_anchors.rs`.
+YAML 1.2.2 allows non-ASCII characters in anchor and alias names. libyaml, and
+tools built on it, often reject them. ozzyyaml accepts them. Tests live in
+`crates/ozzyyaml-parser/tests/unicode_anchors.rs` and in the compose suite.
 
 ## Emitter
 
-`ozzyyaml-emit` walks a composed `Value` and writes YAML 1.2.2 text. Dumping
-is value-level, so comments, tags, and the original layout are not preserved.
+`ozzyyaml-emit` walks a `Value` and writes YAML 1.2.2 text. Dumping is
+value-level: comments, original tags, and exact source layout are not
+preserved.
 
-**Flow is the default** (`[1, 2]`, `{k: v}`). Pass
-`EmitOptions { style: EmitStyle::Block }` for **block** collections
-(`- ` items and `key:` entries). One style applies to the whole tree.
+**Flow style is the default** (`[1, 2]`, `{k: v}`). Pass block style through
+`EmitOptions` when you want `-` lists and `key:` mappings. One style applies to
+the whole dump.
 
-Shared nodes are anchored by **`Rc` identity**, not by value equality. A node
-reachable more than once, including a cycle, is written once with a generated
-anchor (`&a`, `&b`, …) and later visits are aliases (`*a`). The writer accepts
-any Unicode anchor name; generated names are ASCII. Equal but distinct nodes
-are not merged.
+Shared nodes are detected by **`Rc` identity**. A node reached more than once
+(including through a cycle) is written once with a generated anchor and later
+referenced with an alias. Generated names are ASCII (`a`, `b`, …); the writer
+can also emit Unicode anchor spellings when given them.
 
-`dump_all` emits a stream and resets the anchor map for each document, so
-names restart at `a` and an `Rc` shared across documents is written in full in
-each one.
+`dump_all` writes a multi-document stream and resets the anchor map for each
+document:
 
-- More than one document: every document, including the first, is prefixed with `---\n`.
-- One document: the same text as `to_string` (no `---`).
-- An empty slice: an empty string.
+- Several documents: each one, including the first, is prefixed with `---`
+- One document: same text as `to_string` (no `---`)
+- No documents: an empty string
