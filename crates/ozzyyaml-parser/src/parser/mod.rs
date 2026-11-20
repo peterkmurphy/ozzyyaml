@@ -84,7 +84,19 @@ impl<'a> Parser<'a> {
     }
 
     /// Returns the next event, or `None` after the final `StreamEnd`.
+    ///
+    /// After any `Err` the parser is fused: further calls return `Ok(None)`.
     pub fn next_event(&mut self) -> Result<Option<Event>> {
+        let result = self.step();
+        if result.is_err() {
+            self.state = State::Done;
+            self.stack.clear();
+            self.peeked = None;
+        }
+        result
+    }
+
+    fn step(&mut self) -> Result<Option<Event>> {
         match self.state {
             State::StreamStart => {
                 self.state = State::DocumentStart;

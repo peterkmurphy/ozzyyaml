@@ -45,6 +45,8 @@ pub(crate) struct Scanner<'a> {
     /// Reader index just past the most recent quoted scalar; a `:` directly
     /// there is a value indicator inside flow collections (`{"a":1}`).
     quoted_end: Option<usize>,
+    /// Line of the most recent block-level `:` value indicator.
+    value_line: Option<u32>,
     done: bool,
 }
 
@@ -59,6 +61,7 @@ impl<'a> Scanner<'a> {
             possible_key: None,
             flow_level: 0,
             quoted_end: None,
+            value_line: None,
             done: false,
         }
     }

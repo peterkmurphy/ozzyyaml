@@ -21,16 +21,19 @@ impl Default for Limits {
 
 impl Limits {
     /// Builder-style override.
+    #[must_use]
     pub fn max_input_bytes(mut self, n: usize) -> Self {
         self.max_input_bytes = n;
         self
     }
     /// Builder-style override.
+    #[must_use]
     pub fn max_nesting_depth(mut self, n: usize) -> Self {
         self.max_nesting_depth = n;
         self
     }
     /// Builder-style override.
+    #[must_use]
     pub fn max_anchors(mut self, n: usize) -> Self {
         self.max_anchors = n;
         self

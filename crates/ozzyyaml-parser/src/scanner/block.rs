@@ -50,6 +50,15 @@ impl Scanner<'_> {
                 mark,
             ));
         };
+        if self.flow_level == 0 {
+            if self.value_line == Some(key.mark.line) {
+                return Err(scan_error(
+                    "nested implicit mapping on the same line is not allowed".into(),
+                    key.mark,
+                ));
+            }
+            self.value_line = Some(mark.line);
+        }
         let index = key.token_number - self.tokens_taken;
         self.queue.insert(index, Token::Key { mark: key.mark });
         if self.flow_level == 0 && self.roll_indent(key.mark.column) {

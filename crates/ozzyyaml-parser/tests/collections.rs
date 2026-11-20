@@ -377,3 +377,69 @@ fn nesting_limit_error_is_reported_when_event_is_pulled() {
         })
     ));
 }
+
+#[test]
+fn same_line_nested_implicit_mapping_is_rejected() {
+    for input in ["a: b: c", "a: b: c\n", "- a: b: c", "x:\n  a: b: c"] {
+        let err = parse_all(input, Limits::default()).unwrap_err();
+        assert!(
+            matches!(err, Error::Scan { .. } | Error::Parse { .. }),
+            "{input:?}: {err:?}"
+        );
+    }
+}
+
+#[test]
+fn valid_nested_mappings_are_still_accepted() {
+    for input in [
+        "a:\n  b: c",
+        "- a: b\n- c: d",
+        "a: {b: c}",
+        "a: [b: c]",
+        "a: 'b'\nc: d",
+    ] {
+        parse_all(input, Limits::default()).unwrap_or_else(|e| panic!("{input:?}: {e}"));
+    }
+}
+
+#[test]
+fn parser_is_fused_after_any_error() {
+    let inputs = [
+        "[a [b]]",       // flow sequence: missing separator
+        "{a: [b] c: d}", // flow mapping: missing separator
+        "[a: b [c]]",    // flow pair: error mid-collection
+        "[a, ]]",        // stray closer
+        "- a\nb",        // block sequence followed by junk
+        "a: b: c",       // scanner error
+        "!x!y a",        // undeclared tag handle
+        "a\nb",          // extra content after document
+        "{a: *}",        // scanner error inside flow
+    ];
+    for input in inputs {
+        let mut p = Parser::new(input).unwrap();
+        let mut saw_err = false;
+        for _ in 0..1000 {
+            match p.next_event() {
+                Ok(Some(_)) => {}
+                Ok(None) => break,
+                Err(_) => {
+                    saw_err = true;
+                    break;
+                }
+            }
+        }
+        assert!(saw_err, "{input:?}: expected an error");
+        for _ in 0..3 {
+            assert_eq!(p.next_event().unwrap(), None, "{input:?}: not fused");
+        }
+    }
+}
+
+#[test]
+fn parser_is_fused_after_nesting_limit_error() {
+    let limits = Limits::default().max_nesting_depth(1);
+    let mut p = Parser::with_limits("[[x]]", limits).unwrap();
+    while let Ok(Some(_)) = p.next_event() {}
+    assert_eq!(p.next_event().unwrap(), None);
+    assert_eq!(p.next_event().unwrap(), None);
+}
