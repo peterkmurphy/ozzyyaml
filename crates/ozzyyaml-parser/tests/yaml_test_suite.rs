@@ -1,0 +1,137 @@
+//! Runs allowlisted cases from the official yaml-test-suite (`data` branch layout:
+//! one directory per case containing `in.yaml` and `test.event`).
+//!
+//! Only IDs listed in `suite_allowlist.txt` are asserted. Never add a case that fails.
+
+use std::fmt::Write as _;
+use std::path::PathBuf;
+
+use ozzyyaml_parser::{parse_str, Event, ScalarStyle};
+
+fn suite_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../vendor/yaml-test-suite")
+}
+
+fn escape_value(value: &str) -> String {
+    let mut out = String::new();
+    for c in value.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            '\u{8}' => out.push_str("\\b"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+fn props(anchor: &Option<String>, tag: &Option<String>) -> String {
+    let mut s = String::new();
+    if let Some(a) = anchor {
+        let _ = write!(s, " &{a}");
+    }
+    if let Some(t) = tag {
+        let _ = write!(s, " <{t}>");
+    }
+    s
+}
+
+/// Render events in the yaml-test-suite `test.event` line format.
+fn render(events: &[Event]) -> Vec<String> {
+    events
+        .iter()
+        .map(|ev| match ev {
+            Event::StreamStart => "+STR".to_string(),
+            Event::StreamEnd => "-STR".to_string(),
+            Event::DocumentStart { explicit } => {
+                if *explicit {
+                    "+DOC ---".to_string()
+                } else {
+                    "+DOC".to_string()
+                }
+            }
+            Event::DocumentEnd { explicit } => {
+                if *explicit {
+                    "-DOC ...".to_string()
+                } else {
+                    "-DOC".to_string()
+                }
+            }
+            Event::Alias { anchor } => format!("=ALI *{anchor}"),
+            Event::Scalar {
+                anchor,
+                tag,
+                value,
+                style,
+            } => {
+                let ind = match style {
+                    ScalarStyle::Plain => ':',
+                    ScalarStyle::SingleQuoted => '\'',
+                    ScalarStyle::DoubleQuoted => '"',
+                    ScalarStyle::Literal => '|',
+                    ScalarStyle::Folded => '>',
+                };
+                format!("=VAL{} {}{}", props(anchor, tag), ind, escape_value(value))
+            }
+            Event::SequenceStart { anchor, tag, flow } => {
+                let f = if *flow { " []" } else { "" };
+                format!("+SEQ{}{}", f, props(anchor, tag))
+            }
+            Event::SequenceEnd => "-SEQ".to_string(),
+            Event::MappingStart { anchor, tag, flow } => {
+                let f = if *flow { " {}" } else { "" };
+                format!("+MAP{}{}", f, props(anchor, tag))
+            }
+            Event::MappingEnd => "-MAP".to_string(),
+        })
+        .collect()
+}
+
+fn allowlist() -> Vec<String> {
+    include_str!("suite_allowlist.txt")
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(String::from)
+        .collect()
+}
+
+#[test]
+fn allowlisted_cases_match_expected_events() {
+    let root = suite_root();
+    assert!(
+        root.join("229Q").is_dir(),
+        "yaml-test-suite submodule missing; run `git submodule update --init`"
+    );
+
+    let ids = allowlist();
+    assert!(!ids.is_empty(), "allowlist must not be empty");
+
+    let mut failures = Vec::new();
+    for id in &ids {
+        let dir = root.join(id);
+        let input = std::fs::read_to_string(dir.join("in.yaml"))
+            .unwrap_or_else(|e| panic!("{id}: cannot read in.yaml: {e}"));
+        let expected: Vec<String> = std::fs::read_to_string(dir.join("test.event"))
+            .unwrap_or_else(|e| panic!("{id}: cannot read test.event: {e}"))
+            .lines()
+            .map(String::from)
+            .collect();
+
+        match parse_str(&input) {
+            Ok(events) => {
+                let actual = render(&events);
+                if actual != expected {
+                    failures.push(format!(
+                        "{id}: events differ\n  expected: {expected:?}\n  actual:   {actual:?}"
+                    ));
+                }
+            }
+            Err(e) => failures.push(format!("{id}: parse error: {e}")),
+        }
+    }
+
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
