@@ -3,6 +3,7 @@
 
 //! YAML 1.2.2 event parser for ozzyyaml (Milestone A).
 
+mod chars;
 mod error;
 mod event;
 mod limits;

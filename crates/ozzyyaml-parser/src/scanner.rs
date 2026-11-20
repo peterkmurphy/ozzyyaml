@@ -1,36 +1,194 @@
+use std::collections::VecDeque;
+
+use crate::chars::is_anchor_char;
 use crate::error::{Error, Result};
 use crate::event::ScalarStyle;
 use crate::mark::Mark;
 use crate::reader::Reader;
 use crate::token::Token;
 
+/// A token that may turn out to be a simple mapping key once `:` is seen.
+#[derive(Debug, Clone, Copy)]
+struct PossibleKey {
+    token_number: usize,
+    mark: Mark,
+}
+
 /// Converts characters from a [`Reader`] into [`Token`]s.
 ///
-/// Currently recognises only plain, single-quoted and double-quoted scalars;
-/// whitespace and `#` comments between tokens are skipped.
+/// Recognises plain/quoted scalars, anchors, aliases, and block collections
+/// (`- ` entries and single-line simple `key: value` pairs). Indentation is
+/// tracked so `BlockSequenceStart` / `BlockMappingStart` / `BlockEnd` tokens
+/// are emitted. Flow collections, tags, block scalars and complex keys are not
+/// yet supported.
 #[derive(Debug)]
 #[allow(dead_code)] // consumed by the parser in a later task
 pub(crate) struct Scanner<'a> {
     reader: Reader<'a>,
+    queue: VecDeque<Token>,
+    tokens_taken: usize,
+    /// Columns (1-based) of currently open block collections.
+    indents: Vec<u32>,
+    possible_key: Option<PossibleKey>,
+    done: bool,
 }
 
 #[allow(dead_code)]
 impl<'a> Scanner<'a> {
     pub fn new(reader: Reader<'a>) -> Self {
-        Self { reader }
+        Self {
+            reader,
+            queue: VecDeque::new(),
+            tokens_taken: 0,
+            indents: Vec::new(),
+            possible_key: None,
+            done: false,
+        }
     }
 
     /// Returns the next token, or `None` once the input is exhausted.
     pub fn next_token(&mut self) -> Result<Option<Token>> {
+        while self.need_more_tokens() {
+            self.fetch_next_token()?;
+        }
+        let token = self.queue.pop_front();
+        if token.is_some() {
+            self.tokens_taken += 1;
+        }
+        Ok(token)
+    }
+
+    /// A queued token that may still become a key can't be released yet.
+    fn need_more_tokens(&self) -> bool {
+        !self.done
+            && (self.queue.is_empty()
+                || self
+                    .possible_key
+                    .is_some_and(|k| k.token_number == self.tokens_taken))
+    }
+
+    fn fetch_next_token(&mut self) -> Result<()> {
         self.skip_whitespace_and_comments();
         let mark = self.reader.mark();
-        let (value, style) = match self.reader.peek() {
-            None => return Ok(None),
-            Some('\'') => (self.scan_single_quoted(mark)?, ScalarStyle::SingleQuoted),
-            Some('"') => (self.scan_double_quoted(mark)?, ScalarStyle::DoubleQuoted),
-            Some(_) => (self.scan_plain(), ScalarStyle::Plain),
+        if self.possible_key.is_some_and(|k| k.mark.line != mark.line) {
+            self.possible_key = None;
+        }
+        let Some(c) = self.reader.peek() else {
+            self.unroll_indent(0, mark);
+            self.possible_key = None;
+            self.done = true;
+            return Ok(());
         };
-        Ok(Some(Token::Scalar { value, style, mark }))
+        self.unroll_indent(mark.column, mark);
+        match c {
+            '-' if self.indicator_followed_by_blank() => self.fetch_block_entry(mark),
+            ':' if self.indicator_followed_by_blank() => self.fetch_value(mark)?,
+            '&' | '*' => self.fetch_anchor_or_alias(c, mark)?,
+            '\'' => {
+                self.save_possible_key(mark);
+                let value = self.scan_single_quoted(mark)?;
+                self.push_scalar(value, ScalarStyle::SingleQuoted, mark);
+            }
+            '"' => {
+                self.save_possible_key(mark);
+                let value = self.scan_double_quoted(mark)?;
+                self.push_scalar(value, ScalarStyle::DoubleQuoted, mark);
+            }
+            _ => {
+                self.save_possible_key(mark);
+                let value = self.scan_plain();
+                self.push_scalar(value, ScalarStyle::Plain, mark);
+            }
+        }
+        Ok(())
+    }
+
+    fn push_scalar(&mut self, value: String, style: ScalarStyle, mark: Mark) {
+        self.queue.push_back(Token::Scalar { value, style, mark });
+    }
+
+    /// True if the next character is followed by whitespace or end of input.
+    fn indicator_followed_by_blank(&self) -> bool {
+        match self.reader.peek2() {
+            None => true,
+            Some((_, next)) => matches!(next, ' ' | '\t' | '\n'),
+        }
+    }
+
+    fn save_possible_key(&mut self, mark: Mark) {
+        if self.possible_key.is_none() {
+            self.possible_key = Some(PossibleKey {
+                token_number: self.tokens_taken + self.queue.len(),
+                mark,
+            });
+        }
+    }
+
+    /// Opens a block collection at `column` if it is deeper than the current one.
+    fn roll_indent(&mut self, column: u32) -> bool {
+        if self.indents.last().map_or(true, |&top| top < column) {
+            self.indents.push(column);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Closes block collections indented deeper than `column`.
+    fn unroll_indent(&mut self, column: u32, mark: Mark) {
+        while self.indents.last().is_some_and(|&top| top > column) {
+            self.indents.pop();
+            self.queue.push_back(Token::BlockEnd { mark });
+        }
+    }
+
+    fn fetch_block_entry(&mut self, mark: Mark) {
+        if self.roll_indent(mark.column) {
+            self.queue.push_back(Token::BlockSequenceStart { mark });
+        }
+        self.possible_key = None;
+        self.reader.bump();
+        self.queue.push_back(Token::BlockEntry { mark });
+    }
+
+    fn fetch_value(&mut self, mark: Mark) -> Result<()> {
+        let Some(key) = self.possible_key.take() else {
+            return Err(scan_error(
+                "mapping value without a simple key on the same line".into(),
+                mark,
+            ));
+        };
+        let index = key.token_number - self.tokens_taken;
+        self.queue.insert(index, Token::Key { mark: key.mark });
+        if self.roll_indent(key.mark.column) {
+            self.queue
+                .insert(index, Token::BlockMappingStart { mark: key.mark });
+        }
+        self.reader.bump();
+        self.queue.push_back(Token::Value { mark });
+        Ok(())
+    }
+
+    fn fetch_anchor_or_alias(&mut self, indicator: char, mark: Mark) -> Result<()> {
+        self.save_possible_key(mark);
+        self.reader.bump();
+        let mut name = String::new();
+        while let Some(c) = self.reader.peek().filter(|&c| is_anchor_char(c)) {
+            name.push(c);
+            self.reader.bump();
+        }
+        if name.is_empty() {
+            return Err(scan_error(
+                "anchor/alias name must not be empty".into(),
+                mark,
+            ));
+        }
+        self.queue.push_back(if indicator == '&' {
+            Token::Anchor { name, mark }
+        } else {
+            Token::Alias { name, mark }
+        });
+        Ok(())
     }
 
     fn skip_whitespace_and_comments(&mut self) {
@@ -51,12 +209,13 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    /// Reads a single-line plain scalar, stopping at a newline or ` #` comment.
+    /// Reads a single-line plain scalar, stopping at a newline, ` #` comment or
+    /// `:` indicator.
     fn scan_plain(&mut self) -> String {
         let mut value = String::new();
         while let Some(c) = self.reader.peek() {
             let starts_comment = matches!(self.reader.peek2(), Some((' ' | '\t', '#')));
-            if c == '\n' || starts_comment {
+            if c == '\n' || starts_comment || (c == ':' && self.indicator_followed_by_blank()) {
                 break;
             }
             value.push(c);
@@ -211,6 +370,106 @@ mod tests {
             let err = scanner(input).next_token().unwrap_err();
             assert!(matches!(err, Error::Scan { .. }), "{input}: {err:?}");
         }
+    }
+
+    fn tokens(input: &str) -> Vec<Token> {
+        let mut s = scanner(input);
+        let mut out = Vec::new();
+        while let Some(t) = s.next_token().unwrap() {
+            out.push(t);
+        }
+        out
+    }
+
+    fn kinds(input: &str) -> Vec<String> {
+        tokens(input)
+            .into_iter()
+            .map(|t| match t {
+                Token::Scalar { value, .. } => format!("S:{value}"),
+                Token::Anchor { name, .. } => format!("&{name}"),
+                Token::Alias { name, .. } => format!("*{name}"),
+                other => format!("{other:?}").split(' ').next().unwrap().to_string(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn scans_unicode_and_emoji_anchor_names() {
+        assert_eq!(kinds("&汉 x"), ["&汉", "S:x"]);
+        assert_eq!(kinds("*😀"), ["*😀"]);
+        assert_eq!(kinds("*a,b"), ["*a", "S:,b"]);
+    }
+
+    #[test]
+    fn empty_anchor_name_is_scan_error() {
+        assert!(matches!(
+            scanner("& x").next_token(),
+            Err(Error::Scan { .. })
+        ));
+    }
+
+    #[test]
+    fn scans_block_mapping_tokens() {
+        assert_eq!(
+            kinds("a: 1\nb: &x 2\n"),
+            [
+                "BlockMappingStart",
+                "Key",
+                "S:a",
+                "Value",
+                "S:1",
+                "Key",
+                "S:b",
+                "Value",
+                "&x",
+                "S:2",
+                "BlockEnd"
+            ]
+        );
+    }
+
+    #[test]
+    fn scans_block_sequence_tokens() {
+        assert_eq!(
+            kinds("- a\n- *x\n"),
+            [
+                "BlockSequenceStart",
+                "BlockEntry",
+                "S:a",
+                "BlockEntry",
+                "*x",
+                "BlockEnd"
+            ]
+        );
+    }
+
+    #[test]
+    fn nested_collections_close_in_order() {
+        assert_eq!(
+            kinds("a:\n  b: c\nd: e"),
+            [
+                "BlockMappingStart",
+                "Key",
+                "S:a",
+                "Value",
+                "BlockMappingStart",
+                "Key",
+                "S:b",
+                "Value",
+                "S:c",
+                "BlockEnd",
+                "Key",
+                "S:d",
+                "Value",
+                "S:e",
+                "BlockEnd"
+            ]
+        );
+    }
+
+    #[test]
+    fn colon_without_following_blank_stays_in_plain_scalar() {
+        assert_eq!(kinds("a:b"), ["S:a:b"]);
     }
 
     #[test]

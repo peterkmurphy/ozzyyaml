@@ -1,6 +1,7 @@
-use crate::error::{Error, Result};
-use crate::event::Event;
+use crate::error::{Error, LimitKind, Result};
+use crate::event::{Event, ScalarStyle};
 use crate::limits::Limits;
+use crate::mark::Mark;
 use crate::reader::Reader;
 use crate::scanner::Scanner;
 use crate::token::Token;
@@ -12,17 +13,25 @@ enum State {
     DocumentContent,
     DocumentEnd,
     StreamEnd,
+    BlockSequenceEntry,
+    BlockMappingKey,
+    BlockMappingValue,
     Done,
 }
 
 /// Pull parser that turns YAML text into a stream of [`Event`]s.
 ///
-/// Currently supports documents consisting of a single scalar (or no content).
+/// Supports a single implicit document whose root is a scalar, alias, block
+/// sequence or block mapping (with anchors). Flow collections, tags, and
+/// multiple documents are not supported yet.
 #[derive(Debug)]
 pub struct Parser<'a> {
     scanner: Scanner<'a>,
+    limits: Limits,
     state: State,
-    pending: Option<Token>,
+    /// Continuation states of enclosing collections.
+    stack: Vec<State>,
+    peeked: Option<Token>,
 }
 
 impl<'a> Parser<'a> {
@@ -36,9 +45,22 @@ impl<'a> Parser<'a> {
         let reader = Reader::new(input, limits)?;
         Ok(Self {
             scanner: Scanner::new(reader),
+            limits,
             state: State::StreamStart,
-            pending: None,
+            stack: Vec::new(),
+            peeked: None,
         })
+    }
+
+    fn peek(&mut self) -> Result<Option<&Token>> {
+        if self.peeked.is_none() {
+            self.peeked = self.scanner.next_token()?;
+        }
+        Ok(self.peeked.as_ref())
+    }
+
+    fn bump(&mut self) -> Option<Token> {
+        self.peeked.take()
     }
 
     /// Returns the next event, or `None` after the final `StreamEnd`.
@@ -49,8 +71,7 @@ impl<'a> Parser<'a> {
                 Ok(Some(Event::StreamStart))
             }
             State::DocumentStart => {
-                self.pending = self.scanner.next_token()?;
-                if self.pending.is_none() {
+                if self.peek()?.is_none() {
                     self.state = State::StreamEnd;
                     return self.next_event();
                 }
@@ -58,28 +79,49 @@ impl<'a> Parser<'a> {
                 Ok(Some(Event::DocumentStart { explicit: false }))
             }
             State::DocumentContent => {
-                let token = self
-                    .pending
-                    .take()
-                    .expect("pending token set by DocumentStart");
                 self.state = State::DocumentEnd;
-                match token {
-                    Token::Scalar { value, style, .. } => Ok(Some(Event::Scalar {
-                        anchor: None,
-                        tag: None,
-                        value,
-                        style,
-                    })),
-                    other => Err(unexpected(&other)),
-                }
+                self.parse_node(false).map(Some)
             }
             State::DocumentEnd => {
-                if let Some(extra) = self.scanner.next_token()? {
+                if let Some(extra) = self.peek()? {
+                    let err = unexpected(extra);
                     self.state = State::Done;
-                    return Err(unexpected(&extra));
+                    return Err(err);
                 }
                 self.state = State::StreamEnd;
                 Ok(Some(Event::DocumentEnd { explicit: false }))
+            }
+            State::BlockSequenceEntry => match self.peek()? {
+                Some(Token::BlockEntry { .. }) => {
+                    self.bump();
+                    self.parse_node(true).map(Some)
+                }
+                Some(Token::BlockEnd { .. }) => {
+                    self.bump();
+                    self.end_collection(Event::SequenceEnd)
+                }
+                other => Err(unexpected_or_eof(other)),
+            },
+            State::BlockMappingKey => match self.peek()? {
+                Some(Token::Key { .. }) => {
+                    self.bump();
+                    self.state = State::BlockMappingValue;
+                    self.parse_node(true).map(Some)
+                }
+                Some(Token::BlockEnd { .. }) => {
+                    self.bump();
+                    self.end_collection(Event::MappingEnd)
+                }
+                other => Err(unexpected_or_eof(other)),
+            },
+            State::BlockMappingValue => {
+                self.state = State::BlockMappingKey;
+                if matches!(self.peek()?, Some(Token::Value { .. })) {
+                    self.bump();
+                    self.parse_node(true).map(Some)
+                } else {
+                    Ok(Some(empty_scalar(None)))
+                }
             }
             State::StreamEnd => {
                 self.state = State::Done;
@@ -87,6 +129,110 @@ impl<'a> Parser<'a> {
             }
             State::Done => Ok(None),
         }
+    }
+
+    fn end_collection(&mut self, event: Event) -> Result<Option<Event>> {
+        self.state = self.stack.pop().expect("collection state has a parent");
+        Ok(Some(event))
+    }
+
+    /// Parses one node (optionally anchored). When `allow_empty` is set, a
+    /// missing node yields an empty plain scalar.
+    fn parse_node(&mut self, allow_empty: bool) -> Result<Event> {
+        let anchor = match self.peek()? {
+            Some(Token::Anchor { .. }) => match self.bump() {
+                Some(Token::Anchor { name, .. }) => Some(name),
+                _ => unreachable!("peeked an anchor"),
+            },
+            _ => None,
+        };
+        match self.peek()? {
+            Some(Token::Alias { .. }) if anchor.is_some() => {
+                Err(unexpected_or_eof(self.peeked.as_ref()))
+            }
+            Some(Token::Alias { .. }) => match self.bump() {
+                Some(Token::Alias { name, .. }) => Ok(Event::Alias { anchor: name }),
+                _ => unreachable!("peeked an alias"),
+            },
+            Some(Token::Scalar { .. }) => match self.bump() {
+                Some(Token::Scalar { value, style, .. }) => Ok(Event::Scalar {
+                    anchor,
+                    tag: None,
+                    value,
+                    style,
+                }),
+                _ => unreachable!("peeked a scalar"),
+            },
+            Some(Token::BlockSequenceStart { .. }) => {
+                let mark = self.bump_mark();
+                self.start_collection(State::BlockSequenceEntry, mark)?;
+                Ok(Event::SequenceStart {
+                    anchor,
+                    tag: None,
+                    flow: false,
+                })
+            }
+            Some(Token::BlockMappingStart { .. }) => {
+                let mark = self.bump_mark();
+                self.start_collection(State::BlockMappingKey, mark)?;
+                Ok(Event::MappingStart {
+                    anchor,
+                    tag: None,
+                    flow: false,
+                })
+            }
+            Some(Token::Key { .. } | Token::Value { .. } | Token::BlockEntry { .. })
+            | Some(Token::BlockEnd { .. })
+            | None
+                if allow_empty || anchor.is_some() =>
+            {
+                Ok(empty_scalar(anchor))
+            }
+            other => Err(unexpected_or_eof(other)),
+        }
+    }
+
+    fn bump_mark(&mut self) -> Mark {
+        match self.bump() {
+            Some(Token::BlockSequenceStart { mark } | Token::BlockMappingStart { mark }) => mark,
+            _ => unreachable!("peeked a collection start"),
+        }
+    }
+
+    fn start_collection(&mut self, inner: State, mark: Mark) -> Result<()> {
+        if self.stack.len() >= self.limits.max_nesting_depth {
+            return Err(Error::LimitExceeded {
+                kind: LimitKind::NestingDepth,
+                limit: self.limits.max_nesting_depth,
+                mark,
+            });
+        }
+        self.stack.push(self.state);
+        self.state = inner;
+        Ok(())
+    }
+}
+
+fn empty_scalar(anchor: Option<String>) -> Event {
+    Event::Scalar {
+        anchor,
+        tag: None,
+        value: String::new(),
+        style: ScalarStyle::Plain,
+    }
+}
+
+fn unexpected_or_eof(token: Option<&Token>) -> Error {
+    match token {
+        Some(t) => unexpected(t),
+        None => Error::Parse {
+            message: "unexpected end of input".into(),
+            mark: Mark {
+                index: 0,
+                line: 1,
+                column: 1,
+            },
+        },
     }
 }
 
@@ -123,7 +269,7 @@ fn unexpected(token: &Token) -> Error {
         | Token::Scalar { mark, .. } => *mark,
     };
     Error::Parse {
-        message: "unexpected token; only a single scalar document is supported".into(),
+        message: "unexpected token".into(),
         mark,
     }
 }
