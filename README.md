@@ -26,7 +26,10 @@ cargo add ozzyyaml ozzyyaml-emit
 pip install ozzyyaml
 ```
 
-Until those releases are live, build from a git checkout (see below).
+Rust crates are on [crates.io](https://crates.io/crates/ozzyyaml). The first
+PyPI upload is driven by tagging `v*` once `PYPI_API_TOKEN` is set in GitHub
+Actions (see [docs/python.md](docs/python.md#publishing-to-pypi)). Until then,
+install Python from a git checkout.
 
 ## What you get
 
@@ -90,8 +93,9 @@ and Windows.
 3. Emit (`ozzyyaml-emit`) — done
 4. Python package (Maturin wheels) — done
 5. Structured Python `Value` API — done
-6. First crates.io + PyPI `0.1.0` publish — in progress
-7. Optional later work: Serde, PyYAML-compat quirks, trusted publishing
+6. crates.io `0.1.0` — done
+7. PyPI `0.1.0` (tag-driven wheels) — ready to run
+8. Optional later work: Serde, PyYAML-compat quirks, trusted publishing
 
 ## Learn more
 
