@@ -10,7 +10,10 @@ mod limits;
 mod schema;
 mod value;
 
-pub use compose::{from_str, from_str_with_limits, load_all, load_all_with_limits};
+pub use compose::{
+    from_slice, from_slice_with_limits, from_str, from_str_with_limits, load_all,
+    load_all_from_slice, load_all_from_slice_with_limits, load_all_with_limits,
+};
 pub use error::{Error, Result};
 pub use limits::Limits;
 pub use value::Value;

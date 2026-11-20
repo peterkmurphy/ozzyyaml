@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use ozzyyaml::{from_str, from_str_with_limits, load_all, Error, Limits, Value};
+use ozzyyaml::{from_slice, from_str, from_str_with_limits, load_all, Error, Limits, Value};
 
 #[test]
 fn scalar_document() {
@@ -62,6 +62,36 @@ fn undefined_alias() {
         from_str("*missing\n").unwrap_err(),
         Error::UndefinedAlias { name, .. } if name == "missing"
     ));
+}
+
+#[test]
+fn undefined_alias_has_nonzero_mark() {
+    // A bare `*missing` after a scalar is a second document root (parse error).
+    // A block sequence keeps the undefined alias on line 2.
+    let err = from_str("- x\n- *missing\n").unwrap_err();
+    match err {
+        Error::UndefinedAlias { mark, .. } => {
+            // `- *missing` places `*` at line 2, column 3 (byte index 6).
+            assert_eq!(mark.line, 2);
+            assert_eq!(mark.column, 3);
+            assert_eq!(mark.index, 6);
+        }
+        other => panic!("expected UndefinedAlias, got {other:?}"),
+    }
+}
+
+#[test]
+fn from_slice_rejects_invalid_utf8() {
+    let err = from_slice(&[0x80]).unwrap_err();
+    match err {
+        Error::InvalidUtf8 { valid_up_to } => assert_eq!(valid_up_to, 0),
+        other => panic!("expected InvalidUtf8, got {other:?}"),
+    }
+}
+
+#[test]
+fn from_slice_parses_utf8() {
+    assert_eq!(from_slice(b"42\n").unwrap(), Value::Int(42));
 }
 
 #[test]

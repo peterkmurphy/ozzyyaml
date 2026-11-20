@@ -44,6 +44,37 @@ pub fn load_all_with_limits(input: &str, limits: Limits) -> Result<Vec<Value>> {
     composer.compose_stream(&mut parser)
 }
 
+/// Parse a single YAML document from UTF-8 bytes into a [`Value`].
+///
+/// Returns [`Error::InvalidUtf8`] when `input` is not valid UTF-8, and the same
+/// document-count errors as [`from_str`].
+pub fn from_slice(input: &[u8]) -> Result<Value> {
+    from_slice_with_limits(input, Limits::default())
+}
+
+/// [`from_slice`] with custom [`Limits`].
+pub fn from_slice_with_limits(input: &[u8], limits: Limits) -> Result<Value> {
+    let s = std::str::from_utf8(input).map_err(|e| Error::InvalidUtf8 {
+        valid_up_to: e.valid_up_to(),
+    })?;
+    from_str_with_limits(s, limits)
+}
+
+/// Parse every document in a UTF-8 byte stream.
+///
+/// Returns [`Error::InvalidUtf8`] when `input` is not valid UTF-8.
+pub fn load_all_from_slice(input: &[u8]) -> Result<Vec<Value>> {
+    load_all_from_slice_with_limits(input, Limits::default())
+}
+
+/// [`load_all_from_slice`] with custom [`Limits`].
+pub fn load_all_from_slice_with_limits(input: &[u8], limits: Limits) -> Result<Vec<Value>> {
+    let s = std::str::from_utf8(input).map_err(|e| Error::InvalidUtf8 {
+        valid_up_to: e.valid_up_to(),
+    })?;
+    load_all_with_limits(s, limits)
+}
+
 struct Composer {
     limits: Limits,
     /// Anchors of the current document (strong refs for completed / building nodes).
@@ -102,14 +133,14 @@ impl Composer {
                 Event::SequenceStart { anchor, .. } => {
                     let node = Rc::new(Value::Sequence(RefCell::new(Vec::new())));
                     if let Some(name) = anchor {
-                        self.register_anchor(name, Rc::clone(&node))?;
+                        self.register_anchor(name, Rc::clone(&node), parser.last_mark())?;
                     }
                     frames.push(Frame::Sequence { node });
                 }
                 Event::MappingStart { anchor, .. } => {
                     let node = Rc::new(Value::Mapping(RefCell::new(Vec::new())));
                     if let Some(name) = anchor {
-                        self.register_anchor(name, Rc::clone(&node))?;
+                        self.register_anchor(name, Rc::clone(&node), parser.last_mark())?;
                     }
                     frames.push(Frame::Mapping {
                         node,
@@ -153,17 +184,17 @@ impl Composer {
                     let resolved = resolve_scalar(&value, tag.as_deref(), plain);
                     let node = Rc::new(resolved);
                     if let Some(name) = anchor {
-                        self.register_anchor(name, Rc::clone(&node))?;
+                        self.register_anchor(name, Rc::clone(&node), parser.last_mark())?;
                     }
                     self.push_node(&mut frames, &mut doc_root, node)?;
                 }
                 Event::Alias { anchor } => {
-                    let node = self.anchors.get(&anchor).cloned().ok_or_else(|| {
-                        Error::UndefinedAlias {
-                            name: anchor,
-                            mark: Mark::default(),
-                        }
-                    })?;
+                    let mark = parser.last_mark();
+                    let node = self
+                        .anchors
+                        .get(&anchor)
+                        .cloned()
+                        .ok_or_else(|| Error::UndefinedAlias { name: anchor, mark })?;
                     self.push_node(&mut frames, &mut doc_root, node)?;
                 }
             }
@@ -177,18 +208,15 @@ impl Composer {
         Ok(docs)
     }
 
-    fn register_anchor(&mut self, name: String, node: Rc<Value>) -> Result<()> {
+    fn register_anchor(&mut self, name: String, node: Rc<Value>, mark: Mark) -> Result<()> {
         if self.anchors.contains_key(&name) {
-            return Err(Error::DuplicateAnchor {
-                name,
-                mark: Mark::default(),
-            });
+            return Err(Error::DuplicateAnchor { name, mark });
         }
         if self.anchors.len() >= self.limits.max_anchors {
             return Err(Error::LimitExceeded {
                 kind: LimitKind::Anchors,
                 limit: self.limits.max_anchors,
-                mark: Mark::default(),
+                mark,
             });
         }
         self.anchors.insert(name, node);
