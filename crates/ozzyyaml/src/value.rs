@@ -105,6 +105,12 @@ mod tests {
         assert_eq!(Value::Int(7).as_i64(), Some(7));
         assert_eq!(Value::Float(1.5).as_f64(), Some(1.5));
         assert_eq!(Value::String("a".into()).as_str(), Some("a"));
+
+        assert_eq!(Value::Int(1).as_null(), None);
+        assert_eq!(Value::Null.as_bool(), None);
+        assert_eq!(Value::Bool(true).as_i64(), None);
+        assert_eq!(Value::Int(1).as_f64(), None);
+        assert_eq!(Value::Float(1.0).as_i64(), None);
         assert_eq!(Value::Int(1).as_str(), None);
     }
 
