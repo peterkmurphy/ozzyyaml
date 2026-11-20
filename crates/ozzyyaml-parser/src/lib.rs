@@ -18,8 +18,3 @@ pub use event::{Event, ScalarStyle};
 pub use limits::Limits;
 pub use mark::Mark;
 pub use parser::{parse_str, Parser};
-
-/// Placeholder so the crate compiles before real API lands.
-pub fn crate_name() -> &'static str {
-    "ozzyyaml-parser"
-}
