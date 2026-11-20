@@ -48,17 +48,33 @@ CI runs `rustfmt`, Clippy with warnings denied, and the full workspace test
 suite. Checkouts must fetch Git submodules so the yaml-test-suite harness can
 run.
 
+## Python
+
+Bindings live under `python/` and are built with Maturin. They expose familiar
+`load` / `dump` helpers that return ordinary Python types:
+
+```python
+import ozzyyaml
+
+assert ozzyyaml.load("[1, 2]\n") == [1, 2]
+print(ozzyyaml.dump({"a": True}))
+```
+
+See [docs/python.md](docs/python.md) for install-from-checkout steps, limits,
+and behaviour around aliases and cycles. PyPI upload is not configured yet;
+CI builds and smoke-tests wheels.
+
 ## Roadmap
 
 1. Event parser (`ozzyyaml-parser`) — done
 2. Compose + Core schema (`ozzyyaml`) — done
 3. Emit (`ozzyyaml-emit`) — done
-4. Python package (Maturin / PyPI wheels) — in progress
-5. Optional later work: Serde, PyYAML-compat scalar quirks
+4. Python package (Maturin wheels; PyPI publish later) — in progress
+5. Optional later work: structured Python `Value` API, Serde, PyYAML-compat quirks
 
 ## Learn more
 
 - [Architecture overview](docs/architecture.md) — how the pipeline fits together
-- [Python guide](docs/python.md) — when the bindings are available
+- [Python guide](docs/python.md) — install and API notes
 - Design notes live under `docs/superpowers/specs/` for contributors who want
   the detailed decision history
