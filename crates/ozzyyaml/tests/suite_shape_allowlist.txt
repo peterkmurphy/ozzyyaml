@@ -1,0 +1,23 @@
+# Compose shape allowlist: `ID kind [len]` (kind: null|bool|int|float|str|seq|map; len for seq/map).
+# Every ID is on suite_allowlist.txt (compose Ok) and its composed root kind/len was verified
+# against the suite's in.json. Never allowlist a failing or shape-mismatched case.
+229Q  seq  2
+26DV  map  6
+27NA  str
+2AUY  seq  4
+2SXE  map  2
+33X3  seq  3
+3R3P  seq  1
+3UYS  map  1
+4GC6  str
+4UYU  str
+54T7  map  2
+58MP  map  1
+5C5M  seq  2
+6CA3  seq  0
+6H3V  map  1
+Q5MG  map  0
+6LVF  str
+K54U  str
+9TFX  str
+7BMT  map  7
