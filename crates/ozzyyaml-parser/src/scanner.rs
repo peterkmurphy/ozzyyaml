@@ -17,10 +17,12 @@ struct PossibleKey {
 /// Converts characters from a [`Reader`] into [`Token`]s.
 ///
 /// Recognises plain/quoted scalars, anchors, aliases, and block collections
-/// (`- ` entries and single-line simple `key: value` pairs). Indentation is
-/// tracked so `BlockSequenceStart` / `BlockMappingStart` / `BlockEnd` tokens
-/// are emitted. Flow collections, tags, block scalars and complex keys are not
-/// yet supported.
+/// (`- ` entries and single-line simple `key: value` pairs) and flow
+/// collections (`[...]`, `{...}`). Indentation is tracked so
+/// `BlockSequenceStart` / `BlockMappingStart` / `BlockEnd` tokens are emitted;
+/// inside flow collections indentation is ignored. Tags, block scalars,
+/// multi-line plain scalars and complex or flow-collection keys are not yet
+/// supported.
 #[derive(Debug)]
 #[allow(dead_code)] // consumed by the parser in a later task
 pub(crate) struct Scanner<'a> {
@@ -30,6 +32,11 @@ pub(crate) struct Scanner<'a> {
     /// Columns (1-based) of currently open block collections.
     indents: Vec<u32>,
     possible_key: Option<PossibleKey>,
+    /// Number of currently open flow collections (`[` / `{`).
+    flow_level: usize,
+    /// Reader index just past the most recent quoted scalar; a `:` directly
+    /// there is a value indicator inside flow collections (`{"a":1}`).
+    quoted_end: Option<usize>,
     done: bool,
 }
 
@@ -42,6 +49,8 @@ impl<'a> Scanner<'a> {
             tokens_taken: 0,
             indents: Vec::new(),
             possible_key: None,
+            flow_level: 0,
+            quoted_end: None,
             done: false,
         }
     }
@@ -79,20 +88,29 @@ impl<'a> Scanner<'a> {
             self.done = true;
             return Ok(());
         };
-        self.unroll_indent(mark.column, mark);
+        if self.flow_level == 0 {
+            self.unroll_indent(mark.column, mark);
+        }
         match c {
-            '-' if self.indicator_followed_by_blank() => self.fetch_block_entry(mark),
-            ':' if self.indicator_followed_by_blank() => self.fetch_value(mark)?,
+            '[' | '{' => self.fetch_flow_collection_start(c, mark),
+            ']' | '}' => self.fetch_flow_collection_end(c, mark)?,
+            ',' if self.flow_level > 0 => self.fetch_flow_entry(mark),
+            '-' if self.flow_level == 0 && self.indicator_followed_by_blank() => {
+                self.fetch_block_entry(mark)
+            }
+            ':' if self.is_value_indicator(mark) => self.fetch_value(mark)?,
             '&' | '*' => self.fetch_anchor_or_alias(c, mark)?,
             '\'' => {
                 self.save_possible_key(mark);
                 let value = self.scan_single_quoted(mark)?;
                 self.push_scalar(value, ScalarStyle::SingleQuoted, mark);
+                self.quoted_end = Some(self.reader.mark().index);
             }
             '"' => {
                 self.save_possible_key(mark);
                 let value = self.scan_double_quoted(mark)?;
                 self.push_scalar(value, ScalarStyle::DoubleQuoted, mark);
+                self.quoted_end = Some(self.reader.mark().index);
             }
             _ => {
                 self.save_possible_key(mark);
@@ -105,6 +123,53 @@ impl<'a> Scanner<'a> {
 
     fn push_scalar(&mut self, value: String, style: ScalarStyle, mark: Mark) {
         self.queue.push_back(Token::Scalar { value, style, mark });
+    }
+
+    /// True if the `:` at the reader position is a value indicator.
+    fn is_value_indicator(&self, mark: Mark) -> bool {
+        if self.indicator_followed_by_blank() {
+            return true;
+        }
+        self.flow_level > 0
+            && (self.quoted_end == Some(mark.index)
+                || matches!(self.reader.peek2(), Some((_, ',' | '[' | ']' | '{' | '}'))))
+    }
+
+    fn fetch_flow_collection_start(&mut self, indicator: char, mark: Mark) {
+        // Flow collections can't be implicit keys (yet), and a pending key
+        // belongs to the enclosing level, so drop it.
+        self.possible_key = None;
+        self.reader.bump();
+        self.flow_level += 1;
+        self.queue.push_back(if indicator == '[' {
+            Token::FlowSequenceStart { mark }
+        } else {
+            Token::FlowMappingStart { mark }
+        });
+    }
+
+    fn fetch_flow_collection_end(&mut self, indicator: char, mark: Mark) -> Result<()> {
+        if self.flow_level == 0 {
+            return Err(scan_error(
+                format!("unexpected '{indicator}' outside a flow collection"),
+                mark,
+            ));
+        }
+        self.possible_key = None;
+        self.reader.bump();
+        self.flow_level -= 1;
+        self.queue.push_back(if indicator == ']' {
+            Token::FlowSequenceEnd { mark }
+        } else {
+            Token::FlowMappingEnd { mark }
+        });
+        Ok(())
+    }
+
+    fn fetch_flow_entry(&mut self, mark: Mark) {
+        self.possible_key = None;
+        self.reader.bump();
+        self.queue.push_back(Token::FlowEntry { mark });
     }
 
     /// True if the next character is followed by whitespace or end of input.
@@ -160,7 +225,7 @@ impl<'a> Scanner<'a> {
         };
         let index = key.token_number - self.tokens_taken;
         self.queue.insert(index, Token::Key { mark: key.mark });
-        if self.roll_indent(key.mark.column) {
+        if self.flow_level == 0 && self.roll_indent(key.mark.column) {
             self.queue
                 .insert(index, Token::BlockMappingStart { mark: key.mark });
         }
@@ -210,12 +275,14 @@ impl<'a> Scanner<'a> {
     }
 
     /// Reads a single-line plain scalar, stopping at a newline, ` #` comment or
-    /// `:` indicator.
+    /// `:` indicator (and, in flow context, `,[]{}`).
     fn scan_plain(&mut self) -> String {
         let mut value = String::new();
         while let Some(c) = self.reader.peek() {
             let starts_comment = matches!(self.reader.peek2(), Some((' ' | '\t', '#')));
-            if c == '\n' || starts_comment || (c == ':' && self.indicator_followed_by_blank()) {
+            let flow_stop = self.flow_level > 0 && matches!(c, ',' | '[' | ']' | '{' | '}');
+            let is_value = c == ':' && self.is_plain_value_indicator();
+            if c == '\n' || starts_comment || flow_stop || is_value {
                 break;
             }
             value.push(c);
@@ -223,6 +290,14 @@ impl<'a> Scanner<'a> {
         }
         value.truncate(value.trim_end_matches([' ', '\t']).len());
         value
+    }
+
+    /// Like [`Self::is_value_indicator`] but without the quoted-scalar rule,
+    /// which can't apply in the middle of a plain scalar.
+    fn is_plain_value_indicator(&self) -> bool {
+        self.indicator_followed_by_blank()
+            || (self.flow_level > 0
+                && matches!(self.reader.peek2(), Some((_, ',' | '[' | ']' | '{' | '}'))))
     }
 
     fn scan_single_quoted(&mut self, start: Mark) -> Result<String> {

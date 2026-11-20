@@ -16,14 +16,23 @@ enum State {
     BlockSequenceEntry,
     BlockMappingKey,
     BlockMappingValue,
+    FlowSequenceFirst,
+    FlowSequenceEntry,
+    /// Key of a single-pair mapping inside a flow sequence (`[a: 1]`).
+    FlowPairKey,
+    FlowPairValue,
+    FlowPairEnd,
+    FlowMappingFirst,
+    FlowMappingKey,
+    FlowMappingValue,
     Done,
 }
 
 /// Pull parser that turns YAML text into a stream of [`Event`]s.
 ///
-/// Supports a single implicit document whose root is a scalar, alias, block
-/// sequence or block mapping (with anchors). Flow collections, tags, and
-/// multiple documents are not supported yet.
+/// Supports a single implicit document whose root is a scalar, alias, or a
+/// block or flow sequence/mapping (with anchors). Tags and multiple documents
+/// are not supported yet.
 #[derive(Debug)]
 pub struct Parser<'a> {
     scanner: Scanner<'a>,
@@ -123,11 +132,86 @@ impl<'a> Parser<'a> {
                     Ok(Some(empty_scalar(None)))
                 }
             }
+            State::FlowSequenceFirst => self.next_flow_sequence_entry(true),
+            State::FlowSequenceEntry => self.next_flow_sequence_entry(false),
+            State::FlowPairKey => {
+                self.state = State::FlowPairValue;
+                self.parse_node(true).map(Some)
+            }
+            State::FlowPairValue => {
+                self.state = State::FlowPairEnd;
+                if matches!(self.peek()?, Some(Token::Value { .. })) {
+                    self.bump();
+                    self.parse_node(true).map(Some)
+                } else {
+                    Ok(Some(empty_scalar(None)))
+                }
+            }
+            State::FlowPairEnd => self.end_collection(Event::MappingEnd),
+            State::FlowMappingFirst => self.next_flow_mapping_key(true),
+            State::FlowMappingKey => self.next_flow_mapping_key(false),
+            State::FlowMappingValue => {
+                self.state = State::FlowMappingKey;
+                if matches!(self.peek()?, Some(Token::Value { .. })) {
+                    self.bump();
+                    self.parse_node(true).map(Some)
+                } else {
+                    Ok(Some(empty_scalar(None)))
+                }
+            }
             State::StreamEnd => {
                 self.state = State::Done;
                 Ok(Some(Event::StreamEnd))
             }
             State::Done => Ok(None),
+        }
+    }
+
+    /// Consumes the `,` separating flow entries (not before the first one).
+    /// Returns true if the collection's closing token is next instead.
+    fn flow_separator(&mut self, first: bool, is_end: fn(&Token) -> bool) -> Result<bool> {
+        if !first && !self.peek()?.is_some_and(is_end) {
+            match self.peek()? {
+                Some(Token::FlowEntry { .. }) => {
+                    self.bump();
+                }
+                other => return Err(unexpected_or_eof(other)),
+            }
+        }
+        Ok(self.peek()?.is_some_and(is_end))
+    }
+
+    fn next_flow_sequence_entry(&mut self, first: bool) -> Result<Option<Event>> {
+        if self.flow_separator(first, |t| matches!(t, Token::FlowSequenceEnd { .. }))? {
+            self.bump();
+            return self.end_collection(Event::SequenceEnd);
+        }
+        self.state = State::FlowSequenceEntry;
+        if let Some(Token::Key { mark }) = self.peek()?.cloned() {
+            // `[a: 1]` is a sequence entry holding a single-pair mapping.
+            self.bump();
+            self.start_collection(State::FlowPairKey, mark)?;
+            return Ok(Some(Event::MappingStart {
+                anchor: None,
+                tag: None,
+                flow: true,
+            }));
+        }
+        self.parse_node(false).map(Some)
+    }
+
+    fn next_flow_mapping_key(&mut self, first: bool) -> Result<Option<Event>> {
+        if self.flow_separator(first, |t| matches!(t, Token::FlowMappingEnd { .. }))? {
+            self.bump();
+            return self.end_collection(Event::MappingEnd);
+        }
+        self.state = State::FlowMappingValue;
+        if matches!(self.peek()?, Some(Token::Key { .. })) {
+            self.bump();
+            self.parse_node(true).map(Some)
+        } else {
+            // `{a, b: 1}`: a key with no value.
+            self.parse_node(false).map(Some)
         }
     }
 
@@ -181,8 +265,29 @@ impl<'a> Parser<'a> {
                     flow: false,
                 })
             }
+            Some(Token::FlowSequenceStart { .. }) => {
+                let mark = self.bump_mark();
+                self.start_collection(State::FlowSequenceFirst, mark)?;
+                Ok(Event::SequenceStart {
+                    anchor,
+                    tag: None,
+                    flow: true,
+                })
+            }
+            Some(Token::FlowMappingStart { .. }) => {
+                let mark = self.bump_mark();
+                self.start_collection(State::FlowMappingFirst, mark)?;
+                Ok(Event::MappingStart {
+                    anchor,
+                    tag: None,
+                    flow: true,
+                })
+            }
             Some(Token::Key { .. } | Token::Value { .. } | Token::BlockEntry { .. })
             | Some(Token::BlockEnd { .. })
+            | Some(Token::FlowEntry { .. })
+            | Some(Token::FlowSequenceEnd { .. })
+            | Some(Token::FlowMappingEnd { .. })
             | None
                 if allow_empty || anchor.is_some() =>
             {
@@ -194,7 +299,12 @@ impl<'a> Parser<'a> {
 
     fn bump_mark(&mut self) -> Mark {
         match self.bump() {
-            Some(Token::BlockSequenceStart { mark } | Token::BlockMappingStart { mark }) => mark,
+            Some(
+                Token::BlockSequenceStart { mark }
+                | Token::BlockMappingStart { mark }
+                | Token::FlowSequenceStart { mark }
+                | Token::FlowMappingStart { mark },
+            ) => mark,
             _ => unreachable!("peeked a collection start"),
         }
     }
