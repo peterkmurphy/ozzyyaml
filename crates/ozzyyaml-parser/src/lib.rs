@@ -4,11 +4,14 @@
 //! YAML 1.2.2 event parser for ozzyyaml (Milestone A).
 
 mod error;
+mod event;
 mod limits;
 mod mark;
 mod reader;
+mod token;
 
 pub use error::{Error, LimitKind, Result};
+pub use event::{Event, ScalarStyle};
 pub use limits::Limits;
 pub use mark::Mark;
 
