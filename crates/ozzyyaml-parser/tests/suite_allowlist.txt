@@ -1,0 +1,10 @@
+# yaml-test-suite case IDs that must pass (vendor/yaml-test-suite, `data` branch layout).
+# Only add IDs that already pass; never allowlist failing cases.
+AVM7
+HWV9
+98YD
+4GC6
+4UYU
+8MK2
+K54U
+27NA

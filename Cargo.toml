@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = ["crates/ozzyyaml-parser"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"
+repository = "https://github.com/peterkmurphy/ozzyyaml"
+authors = ["Peter Murphy <peterkmurphy@gmail.com>"]
+rust-version = "1.80"
