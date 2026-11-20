@@ -1,0 +1,13 @@
+[package]
+name = "ozzyyaml"
+description = "YAML 1.2.2 Core-schema documents built on ozzyyaml-parser events"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ozzyyaml-parser = { path = "../ozzyyaml-parser" }
+thiserror = "2"

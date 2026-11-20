@@ -26,8 +26,8 @@ Add the `ozzyyaml` crate: compose `ozzyyaml-parser` events into an `Rc`-shared d
   - `Int(i64)`
   - `Float(f64)`
   - `String(String)`
-  - `Sequence(Vec<Rc<Value>>)`
-  - `Mapping(Vec<(Rc<Value>, Rc<Value>)>)` — ordered pairs; duplicate keys retained as separate entries for now
+  - `Sequence(RefCell<Vec<Rc<Value>>>)` — `RefCell` so anchors can be registered before children are filled (cycles)
+  - `Mapping(RefCell<Vec<(Rc<Value>, Rc<Value>)>>)` — ordered pairs; duplicate keys retained as separate entries for now
 - Alias targets and collection children are `Rc<Value>` so aliases share identity (`Rc::ptr_eq`)
 - `from_str(input) -> Result<Value>` — single document (error if zero or >1 docs unless documented otherwise; prefer: require exactly one non-empty document)
 - `load_all(input) -> Result<Vec<Value>>` — all documents in the stream

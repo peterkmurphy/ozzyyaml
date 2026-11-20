@@ -22,10 +22,10 @@
 
 **Files:** Create `crates/ozzyyaml/Cargo.toml`, `src/lib.rs`; add to workspace `Cargo.toml`.
 
-- [ ] Depend on `ozzyyaml-parser` (path)
-- [ ] `forbid(unsafe_code)`, re-export placeholder
-- [ ] `cargo test -p ozzyyaml` passes
-- [ ] Commit `chore: scaffold ozzyyaml crate for Milestone B`
+- [x] Depend on `ozzyyaml-parser` (path)
+- [x] `forbid(unsafe_code)`, re-export placeholder
+- [x] `cargo test -p ozzyyaml` passes
+- [x] Commit `chore: scaffold ozzyyaml crate for Milestone B`
 
 ---
 
@@ -33,11 +33,11 @@
 
 **Files:** `value.rs`, `error.rs`, `limits.rs`, `lib.rs`
 
-- [ ] Define `Value` as in the B design (`Rc` in seq/map)
-- [ ] `Error` with `Parse(#[from] ozzyyaml_parser::Error)`, compose variants, `LimitExceeded`
-- [ ] Wrap/re-export limits with same defaults as parser
-- [ ] Unit test: `Rc::ptr_eq` on two clones
-- [ ] Commit `feat(ozzyyaml): add Value, Error, and Limits`
+- [x] Define `Value` as in the B design (`Rc` in seq/map)
+- [x] `Error` with `Parse(#[from] ozzyyaml_parser::Error)`, compose variants, `LimitExceeded`
+- [x] Wrap/re-export limits with same defaults as parser
+- [x] Unit test: `Rc::ptr_eq` on two clones
+- [x] Commit `feat(ozzyyaml): add Value, Error, and Limits`
 
 ---
 
@@ -45,9 +45,9 @@
 
 **Files:** `schema/core.rs` (+ `schema/mod.rs`)
 
-- [ ] `resolve_plain(s: &str) -> Value` implementing Core 1.2.2 (no yes/no/on/off; `0o` octal)
-- [ ] Table-driven unit tests
-- [ ] Commit `feat(ozzyyaml): Core schema plain scalar resolution`
+- [x] `resolve_plain(s: &str) -> Value` implementing Core 1.2.2 (no yes/no/on/off; `0o` octal)
+- [x] Table-driven unit tests
+- [x] Commit `feat(ozzyyaml): Core schema plain scalar resolution`
 
 ---
 
@@ -55,18 +55,18 @@
 
 **Files:** `compose.rs`, `lib.rs`, `tests/compose.rs`
 
-- [ ] Walk events → `Value` / `Vec<Value>`
-- [ ] Anchors map; aliases `Rc::clone`; duplicate/undefined alias errors
-- [ ] `max_anchors` enforcement
-- [ ] `from_str` (exactly one document), `load_all`
-- [ ] Tests: sharing, cycle, unicode anchor, limits, multi-doc
-- [ ] Commit `feat(ozzyyaml): compose events into Rc-shared Values`
+- [x] Walk events → `Value` / `Vec<Value>`
+- [x] Anchors map; aliases `Rc::clone`; duplicate/undefined alias errors
+- [x] `max_anchors` enforcement
+- [x] `from_str` (exactly one document), `load_all`
+- [x] Tests: sharing, cycle, unicode anchor, limits, multi-doc
+- [x] Commit `feat(ozzyyaml): compose events into Rc-shared Values`
 
 ---
 
 ### Task 5: Wire CI + README + freeze
 
-- [ ] CI already tests workspace — ensure `cargo test` covers new crate (workspace default)
-- [ ] README Milestone B note
-- [ ] `cargo fmt`, `clippy -D warnings`, full test
-- [ ] Commit `docs: Milestone B readiness`
+- [x] CI already tests workspace — ensure `cargo test` covers new crate (workspace default)
+- [x] README Milestone B note
+- [x] `cargo fmt`, `clippy -D warnings`, full test
+- [x] Commit `docs: Milestone B readiness`

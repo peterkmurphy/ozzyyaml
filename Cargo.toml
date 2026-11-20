@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/ozzyyaml-parser"]
+members = ["crates/ozzyyaml-parser", "crates/ozzyyaml"]
 
 [workspace.package]
 version = "0.1.0"
