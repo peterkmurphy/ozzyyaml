@@ -33,7 +33,7 @@ This is a personal project under `/home/peter/projects/ozzyyaml` (not a Greens p
 | A | Event stream (scan → parse → events) | `ozzyyaml-parser` |
 | B | Compose + Core-schema construct → shared document graph | `ozzyyaml` |
 | Emit | Value/events → YAML text | `ozzyyaml-emit` |
-| Python | Thin PyO3 façade + pure-Python public API | `python/` (Maturin) |
+| Python | Thin PyO3 façade + pure-Python public API; **publish to PyPI** | `python/` (Maturin) |
 
 **PyYAML-compat schema mode** is planned after Core schema works; it is not part of Milestone B’s first cut.
 
@@ -103,7 +103,9 @@ Each crate keeps a **tiny public surface**; internals stay private. Crate roots 
 
 - Domain logic stays in Rust; PyO3 is a thin adapter
 - Maturin packaging; extension module as `_native` (or similar); idiomatic Python façade in `__init__.py`
+- **Distributed as a normal Python library on [PyPI](https://pypi.org/)** (platform wheels + sdist), e.g. `pip install ozzyyaml` (name confirmed at publish time if taken)
 - Default schema = Core; PyYAML-compat when available in Rust
+- CI builds manylinux/macOS/Windows wheels; smoke-test install from the built artifact in a clean venv before release
 
 ## Security & resource limits
 
@@ -163,3 +165,4 @@ Flattening APIs (JSON export, deep owned trees) must be explicit and budgeted; t
 | DoS primary brake | `max_anchors` (+ nesting/input caps) |
 | License | BSD-3-Clause |
 | Location | `/home/peter/projects/ozzyyaml` |
+| Python distribution | PyPI package (Maturin wheels) |
