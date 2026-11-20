@@ -1,0 +1,13 @@
+[package]
+name = "ozzyyaml-emit"
+description = "Emit ozzyyaml Value trees as YAML 1.2.2 text"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ozzyyaml = { path = "../ozzyyaml" }
+thiserror = "2"
