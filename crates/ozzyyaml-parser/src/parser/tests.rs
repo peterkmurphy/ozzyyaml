@@ -57,9 +57,29 @@ fn last_mark_tracks_alias_position() {
     while let Some(ev) = p.next_event().unwrap() {
         if matches!(ev, Event::Alias { .. }) {
             let m = p.last_mark();
-            assert!(m.line >= 2, "alias is on line 2, got {m}");
+            // `- *a` places `*` at line 2, column 3.
+            assert_eq!(m.line, 2);
+            assert_eq!(m.column, 3);
             return;
         }
     }
     panic!("expected Alias event");
+}
+
+#[test]
+fn last_mark_unchanged_on_parse_error() {
+    // A second root is `Err`. That call must not move `last_mark`; the error
+    // carries its own mark, and the parser is fused afterward.
+    let mut p = Parser::new("a\nb\n").unwrap();
+    loop {
+        let before = p.last_mark();
+        match p.next_event() {
+            Ok(Some(_)) => {}
+            Ok(None) => panic!("expected a parse error before stream end"),
+            Err(_) => {
+                assert_eq!(p.last_mark(), before);
+                return;
+            }
+        }
+    }
 }
