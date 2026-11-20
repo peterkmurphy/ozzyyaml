@@ -4,10 +4,16 @@ ozzyyaml can be used from Python through a small Maturin / PyO3 package. The
 heavy lifting stays in Rust; Python can either receive ordinary native values
 or structured `Value` objects that preserve alias identity (including cycles).
 
-Wheels are built in CI. Publishing to PyPI is not set up yet, so for now you
-install from a local checkout.
+## Install
 
-## Install from a checkout
+```bash
+pip install ozzyyaml
+```
+
+Requires Python 3.10 or newer. Wheels are built for Linux, macOS, and Windows.
+Until the first PyPI release is up, install from a checkout instead.
+
+### Install from a checkout
 
 ```bash
 git submodule update --init --recursive

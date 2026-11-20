@@ -14,9 +14,14 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: BSD License",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Rust",
   "Topic :: Text Processing :: Markup",
 ]
+urls = { Homepage = "https://github.com/peterkmurphy/ozzyyaml", Repository = "https://github.com/peterkmurphy/ozzyyaml", Issues = "https://github.com/peterkmurphy/ozzyyaml/issues" }
 
 [tool.maturin]
 manifest-path = "../crates/ozzyyaml-python/Cargo.toml"

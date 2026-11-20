@@ -1,6 +1,6 @@
 [package]
 name = "ozzyyaml"
-description = "YAML 1.2.2 Core-schema documents built on ozzyyaml-parser events"
+description = "YAML 1.2.2 Core-schema documents with shared aliases and cycles"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,10 @@ repository.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 readme = "README.md"
+documentation = "https://docs.rs/ozzyyaml"
+keywords = ["yaml", "compose", "core-schema", "anchors"]
+categories = ["parser-implementations", "encoding", "data-structures"]
 
 [dependencies]
-ozzyyaml-parser = { path = "../ozzyyaml-parser" }
+ozzyyaml-parser = { version = "0.1.0", path = "../ozzyyaml-parser" }
 thiserror = "2"

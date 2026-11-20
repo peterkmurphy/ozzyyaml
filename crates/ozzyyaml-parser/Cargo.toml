@@ -1,6 +1,6 @@
 [package]
 name = "ozzyyaml-parser"
-description = "YAML 1.2.2 event parser (scan → parse → events)"
+description = "YAML 1.2.2 event parser with Unicode anchor support"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,6 +8,9 @@ repository.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 readme = "README.md"
+documentation = "https://docs.rs/ozzyyaml-parser"
+keywords = ["yaml", "parser", "unicode", "anchors"]
+categories = ["parser-implementations", "encoding"]
 
 [dependencies]
 thiserror = "2"
