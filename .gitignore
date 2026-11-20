@@ -31,3 +31,4 @@ python/ozzyyaml/*.so
 # Local agent / worktrees
 .worktrees/
 .superpowers/
+python/dist/
