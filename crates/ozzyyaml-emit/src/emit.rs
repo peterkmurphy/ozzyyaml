@@ -1,7 +1,7 @@
 //! Recursive `Value` writer (flow and block styles) with `Rc`-identity anchors.
 
 use crate::anchors::{Anchors, Visit};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::options::{EmitOptions, EmitStyle};
 use crate::scalar::{format_float, format_string};
 use ozzyyaml::Value;
@@ -39,17 +39,35 @@ pub fn to_string_with_options(value: &Value, opts: &EmitOptions) -> Result<Strin
 }
 
 /// Emit every document in `docs` using [`EmitOptions::default`].
+///
+/// See [`dump_all_with_options`] for the stream convention.
 pub fn dump_all(docs: &[Value]) -> Result<String> {
     dump_all_with_options(docs, &EmitOptions::default())
 }
 
 /// Emit every document in `docs` with explicit options.
 ///
-/// Returns an error until multi-document emission is implemented.
-pub fn dump_all_with_options(_docs: &[Value], _opts: &EmitOptions) -> Result<String> {
-    Err(Error::Emit {
-        message: "not implemented".into(),
-    })
+/// Each document is emitted on its own, so anchor names restart at `a` and an
+/// `Rc` shared across documents is written in full in each one. Anchors do
+/// not cross document boundaries.
+///
+/// - `docs.len() > 1`: every document, including the first, is prefixed with
+///   `---\n`.
+/// - `docs.len() == 1`: same text as [`to_string_with_options`] (no `---`).
+/// - `docs.len() == 0`: an empty string (not a null document).
+pub fn dump_all_with_options(docs: &[Value], opts: &EmitOptions) -> Result<String> {
+    if docs.is_empty() {
+        return Ok(String::new());
+    }
+    if docs.len() == 1 {
+        return to_string_with_options(&docs[0], opts);
+    }
+    let mut out = String::new();
+    for doc in docs {
+        out.push_str("---\n");
+        out.push_str(&to_string_with_options(doc, opts)?);
+    }
+    Ok(out)
 }
 
 /// Write an anchor declaration (`&name`); the name is written verbatim, so
