@@ -22,6 +22,11 @@ on:
 permissions:
   contents: read
 
+# PyO3 0.23 supports through 3.13. Do not use --find-interpreter: manylinux
+# images now ship 3.14 and the build fails.
+env:
+  MATURIN_INTERPRETERS: "3.10 3.11 3.12 3.13"
+
 jobs:
   linux:
     runs-on: ubuntu-22.04
@@ -40,8 +45,7 @@ jobs:
           target: ${{ matrix.target }}
           manylinux: auto
           working-directory: python
-          args: --release --out dist --find-interpreter
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          args: --release --out dist --interpreter ${{ env.MATURIN_INTERPRETERS }}
       - name: Smoke-test (x86_64)
         if: matrix.target == 'x86_64'
         working-directory: python
@@ -49,7 +53,7 @@ jobs:
           python -m venv .venv
           . .venv/bin/activate
           pip install pytest
-          pip install dist/*.whl
+          pip install --no-index --find-links dist ozzyyaml
           pytest tests -q
       - uses: actions/upload-artifact@v4
         with:
@@ -61,20 +65,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [x64]
+        python: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          architecture: ${{ matrix.target }}
-      - name: Build wheels
+          python-version: ${{ matrix.python }}
+          architecture: x64
+      - name: Build wheel
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.target }}
+          target: x64
           working-directory: python
-          args: --release --out dist --find-interpreter
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          args: --release --out dist --interpreter python
       - name: Smoke-test
         working-directory: python
         shell: bash
@@ -82,11 +85,11 @@ jobs:
           python -m venv .venv
           source .venv/Scripts/activate
           pip install pytest
-          pip install dist/*.whl
+          pip install --no-index --find-links dist ozzyyaml
           pytest tests -q
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-windows-${{ matrix.target }}
+          name: wheels-windows-cp${{ matrix.python }}
           path: python/dist
 
   macos:
@@ -97,7 +100,7 @@ jobs:
         include:
           - runner: macos-13
             target: x86_64
-          - runner: macos-14
+          - runner: macos-latest
             target: aarch64
     steps:
       - uses: actions/checkout@v4
@@ -109,15 +112,14 @@ jobs:
         with:
           target: ${{ matrix.target }}
           working-directory: python
-          args: --release --out dist --find-interpreter
-          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          args: --release --out dist --interpreter ${{ env.MATURIN_INTERPRETERS }}
       - name: Smoke-test
         working-directory: python
         run: |
           python -m venv .venv
           . .venv/bin/activate
           pip install pytest
-          pip install dist/*.whl
+          pip install --no-index --find-links dist ozzyyaml
           pytest tests -q
       - uses: actions/upload-artifact@v4
         with:
