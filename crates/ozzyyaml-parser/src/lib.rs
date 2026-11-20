@@ -6,10 +6,12 @@
 mod error;
 mod limits;
 mod mark;
+mod reader;
 
 pub use error::{Error, LimitKind, Result};
 pub use limits::Limits;
 pub use mark::Mark;
+pub use reader::Reader;
 
 /// Placeholder so the crate compiles before real API lands.
 pub fn crate_name() -> &'static str {
