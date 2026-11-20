@@ -194,7 +194,7 @@ impl Composer {
                         .anchors
                         .get(&anchor)
                         .cloned()
-                        .ok_or_else(|| Error::UndefinedAlias { name: anchor, mark })?;
+                        .ok_or(Error::UndefinedAlias { name: anchor, mark })?;
                     self.push_node(&mut frames, &mut doc_root, node)?;
                 }
             }
