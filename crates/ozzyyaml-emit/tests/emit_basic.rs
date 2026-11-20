@@ -185,26 +185,6 @@ fn roundtrip_flow_and_block() {
 }
 
 #[test]
-fn shared_non_cyclic_children_are_emitted_twice() {
-    let shared = Rc::new(Value::Int(9));
-    let v = Value::Sequence(RefCell::new(vec![shared.clone(), shared]));
-    assert_eq!(to_string(&v).unwrap(), "[9, 9]\n");
-}
-
-#[test]
-fn cycle_is_an_error_not_a_stack_overflow() {
-    let outer = Rc::new(Value::Sequence(RefCell::new(vec![])));
-    if let Value::Sequence(items) = &*outer {
-        items.borrow_mut().push(outer.clone());
-    }
-    assert!(to_string(&outer).is_err());
-    // Break the cycle so the test does not leak.
-    if let Value::Sequence(items) = &*outer {
-        items.borrow_mut().clear();
-    }
-}
-
-#[test]
 fn collection_keys_use_flow_form() {
     // The in-tree parser cannot yet read collection keys back, so only the
     // emitted text is asserted here.

@@ -3,6 +3,7 @@
 
 //! Emit [`ozzyyaml::Value`] trees as YAML 1.2.2 text.
 
+mod anchors;
 mod emit;
 mod error;
 mod options;
