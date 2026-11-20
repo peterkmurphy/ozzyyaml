@@ -14,22 +14,21 @@ Unicode anchors on purpose (`&汉`, `*😀`, and similar).
 
 ## Install
 
-**Rust** (crates.io — after the first publish):
+**Rust:**
 
 ```bash
 cargo add ozzyyaml ozzyyaml-emit
 ```
 
-**Python** (PyPI — after the first publish):
+**Python:**
 
 ```bash
 pip install ozzyyaml
 ```
 
-Rust crates are on [crates.io](https://crates.io/crates/ozzyyaml). The first
-PyPI upload is driven by tagging `v*` once `PYPI_API_TOKEN` is set in GitHub
-Actions (see [docs/python.md](docs/python.md#publishing-to-pypi)). Until then,
-install Python from a git checkout.
+Crates: [crates.io/crates/ozzyyaml](https://crates.io/crates/ozzyyaml).  
+Python: [pypi.org/project/ozzyyaml](https://pypi.org/project/ozzyyaml/).  
+How to cut a release: [docs/releasing.md](docs/releasing.md).
 
 ## What you get
 
@@ -83,8 +82,8 @@ assert v[0] is v[1]
 ```
 
 See [docs/python.md](docs/python.md) for install steps, limits, and behaviour
-around aliases and cycles. CI builds and smoke-tests wheels for Linux, macOS,
-and Windows.
+around aliases and cycles. CI builds and smoke-tests wheels for Linux, macOS
+(Apple Silicon), and Windows.
 
 ## Roadmap
 
@@ -93,13 +92,14 @@ and Windows.
 3. Emit (`ozzyyaml-emit`) — done
 4. Python package (Maturin wheels) — done
 5. Structured Python `Value` API — done
-6. crates.io `0.1.0` — done
-7. PyPI `0.1.0` (tag-driven wheels) — ready to run
-8. Optional later work: Serde, PyYAML-compat quirks, trusted publishing
+6. crates.io + PyPI `0.1.0` — done
+7. Trusted publishing (OIDC) — in progress
+8. Optional later work: Serde, PyYAML-compat quirks
 
 ## Learn more
 
 - [Architecture overview](docs/architecture.md) — how the pipeline fits together
 - [Python guide](docs/python.md) — install and API notes
+- [Releasing](docs/releasing.md) — tags, Trusted Publishing setup
 - Design notes live under `docs/superpowers/specs/` for contributors who want
   the detailed decision history

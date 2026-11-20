@@ -10,29 +10,11 @@ or structured `Value` objects that preserve alias identity (including cycles).
 pip install ozzyyaml
 ```
 
-Requires Python 3.10 or newer. Wheels are built for Linux, macOS, and Windows.
-Until the first PyPI release is up, install from a checkout instead.
+Requires Python 3.10 or newer. Wheels are published for Linux (x86_64 +
+aarch64), Windows (x64), and macOS (Apple Silicon).
 
-## Publishing to PyPI
-
-CI workflow: [`.github/workflows/publish-pypi.yml`](../.github/workflows/publish-pypi.yml).
-
-1. On [pypi.org](https://pypi.org), create an API token scoped to the `ozzyyaml`
-   project (or your account, for the first upload that creates the project).
-2. In the GitHub repo, add a secret named **`PYPI_API_TOKEN`** with that token.
-3. Ensure `python/pyproject.toml` version matches the tag you will push
-   (for example `0.1.0` ↔ `v0.1.0`).
-4. Tag and push:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-The workflow builds manylinux (x86_64 + aarch64), Windows (x64), and macOS
-(aarch64 / Apple Silicon) wheels plus an sdist, smoke-tests on the native
-runners, then uploads with Maturin. `workflow_dispatch` builds artifacts
-without uploading; only `v*` tags publish.
+For cutting a release (Trusted Publishing, tags, version bumps), see
+[releasing.md](releasing.md).
 
 ### Install from a checkout
 

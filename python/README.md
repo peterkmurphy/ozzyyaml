@@ -14,10 +14,10 @@ similar).
 pip install ozzyyaml
 ```
 
-Wheels are built for Linux, macOS, and Windows. Until the first PyPI release is
-up, install from a [git checkout](#develop-from-a-checkout) instead.
+Wheels are published for Linux (x86_64 + aarch64), Windows (x64), and macOS
+(Apple Silicon). Requires Python 3.10 or newer.
 
-Requires Python 3.10 or newer.
+Contributors can still [build from a checkout](#develop-from-a-checkout).
 
 ## Quick start
 
