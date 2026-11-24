@@ -3,8 +3,13 @@
 ozzyyaml can be used from Python through a small Maturin / PyO3 package. The
 heavy lifting stays in Rust; Python can either receive ordinary native values
 or structured `Value` objects that preserve alias identity (including cycles).
-Language coverage matches the Rust crates — not yet full YAML 1.2.2; see
-[conformance.md](conformance.md).
+
+Coverage matches the Rust crates: YAML **1.2.2** parse, Core compose, and data
+round-trip emit, including block scalars, explicit keys, double-quoted
+escapes, and UTF-16/32 on `bytes` input (BOM or §5.2 null-pattern). See
+[conformance.md](conformance.md) for suite percentages and honest caveats
+(~91% of valid `test.event` cases allowlisted; emit is data equality, not
+presentation-preserving).
 
 ## Install
 
@@ -45,13 +50,23 @@ assert ozzyyaml.load(text) == {"items": [1, 2]}
 
 docs = ozzyyaml.load_all("1\n---\n2\n")
 assert docs == [1, 2]
+
+# bytes: UTF-8, or UTF-16/32 with a BOM or null-pattern (§5.2)
+assert ozzyyaml.load(b"\xff\xfea\x00\n\x00") == "a"
+assert ozzyyaml.load(bytes([0x61, 0x00, 0x0A, 0x00])) == "a"
 ```
+
+`load` / `load_all` (and the Value variants) accept `str` or `bytes`. String
+input is UTF-8; byte input uses the same §5.2 detection as Rust `from_slice`
+(BOM and null-pattern for UTF-8 / UTF-16 / UTF-32). Dump always emits UTF-8
+text.
 
 Supported dump styles are `"flow"` (default) and `"block"`.
 
 Optional limit keyword arguments on `load` / `load_all` (and the Value
 variants below) map to the Rust `Limits` fields: `max_anchors`,
-`max_nesting_depth`, and `max_input_bytes`.
+`max_nesting_depth`, and `max_input_bytes`. Defaults match Rust (256 MiB
+input, 10 000 nesting, 100 000 anchors).
 
 ### Native types
 
@@ -66,7 +81,8 @@ variants below) map to the Rust `Limits` fields: `max_anchors`,
 | mapping | `dict` (insertion order; duplicate keys keep the last value) |
 
 The loader uses the YAML 1.2.2 Core schema, so values like `yes` stay strings
-rather than becoming booleans.
+rather than becoming booleans. Known tags are strict: `!!int twelve` and
+`!!bool yes` raise `OzzyYamlError`.
 
 Shared aliases that form a DAG become one Python object referenced from
 several places (`a is b`). **Cycles cannot be represented as ordinary lists

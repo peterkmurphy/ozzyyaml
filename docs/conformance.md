@@ -11,8 +11,12 @@ round-trip emit, with the caveats below.
 - Core compose with **strict** known tags (`!!int twelve` is an error)
 - Emit → load data round-trip for acyclic documents in the
   parser∩compose allowlist
+- Chapter 5 character classes: `c-printable` / `nb-char` / `nb-json`, reserved
+  `@`/`\`` plain starts, and `ns-uri-char` / `ns-tag-char` for tags
 - Byte APIs (`from_slice` / `load_all_from_slice`): UTF-8, UTF-16LE/BE, and
-  UTF-32LE/BE via BOM (§5.2). String APIs and emit remain UTF-8
+  UTF-32LE/BE via BOM **and** §5.2 null-pattern detection. String APIs and
+  emit remain UTF-8. Mid-document BOM is an error; BOM inside double-quoted
+  scalars is allowed
 - Default `Limits`: 256 MiB input, 10 000 nesting, 100 000 anchors (overridable)
 
 ## Honest caveats
@@ -26,7 +30,9 @@ round-trip emit, with the caveats below.
   only `Value` data equality after dump→load.
 - **Core only:** `yes` / `no` stay strings; no YAML 1.1 merge keys.
 
-Design track:
-[superpowers/specs/2026-11-24-ozzyyaml-conformance-design.md](superpowers/specs/2026-11-24-ozzyyaml-conformance-design.md).  
-Plan:
-[superpowers/plans/2026-11-24-ozzyyaml-conformance.md](superpowers/plans/2026-11-24-ozzyyaml-conformance.md).
+Design tracks:
+[conformance](superpowers/specs/2026-11-24-ozzyyaml-conformance-design.md),
+[Chapter 5 chars](superpowers/specs/2026-11-25-ozzyyaml-chapter5-chars-design.md).  
+Plans:
+[conformance](superpowers/plans/2026-11-24-ozzyyaml-conformance.md),
+[Chapter 5](superpowers/plans/2026-11-25-ozzyyaml-chapter5-chars.md).

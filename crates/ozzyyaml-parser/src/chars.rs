@@ -31,6 +31,7 @@ pub(crate) fn is_reserved(c: char) -> bool {
 }
 
 /// `[22] c-indicator`
+#[allow(dead_code)] // available for grammar-faithful wiring; covered by unit tests
 pub(crate) fn is_indicator(c: char) -> bool {
     matches!(
         c,
@@ -205,8 +206,12 @@ mod tests {
         assert!(!is_reserved('a'));
         assert!(is_indicator('-'));
         assert!(is_indicator('@'));
+        assert!(is_indicator('%'));
+        assert!(!is_indicator('a'));
         assert!(is_flow_indicator(','));
         assert!(!is_flow_indicator(':'));
+        assert!(is_ns_char(':'));
+        assert!(!is_ns_char('\t'));
     }
 
     #[test]
