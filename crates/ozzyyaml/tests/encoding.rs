@@ -78,3 +78,27 @@ fn utf8_without_bom_still_works() {
 fn invalid_utf8_without_bom_is_error() {
     assert!(from_slice(&[0x80]).is_err());
 }
+
+#[test]
+fn utf16le_without_bom_via_null_pattern() {
+    let bytes = vec![0x61, 0x00, 0x0a, 0x00];
+    assert_eq!(from_slice(&bytes).unwrap(), Value::String("a".into()));
+}
+
+#[test]
+fn utf16be_without_bom_via_null_pattern() {
+    let bytes = vec![0x00, 0x61, 0x00, 0x0a];
+    assert_eq!(from_slice(&bytes).unwrap(), Value::String("a".into()));
+}
+
+#[test]
+fn utf32le_without_bom_via_null_pattern() {
+    let bytes = vec![0x61, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00];
+    assert_eq!(from_slice(&bytes).unwrap(), Value::String("a".into()));
+}
+
+#[test]
+fn utf32be_without_bom_via_null_pattern() {
+    let bytes = vec![0x00, 0x00, 0x00, 0x61, 0x00, 0x00, 0x00, 0x0a];
+    assert_eq!(from_slice(&bytes).unwrap(), Value::String("a".into()));
+}

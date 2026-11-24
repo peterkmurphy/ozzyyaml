@@ -4,23 +4,49 @@ use crate::error::{Error, Result};
 
 /// Decode a YAML byte stream to a UTF-8 [`String`].
 ///
-/// Detects a leading BOM for UTF-8 / UTF-16LE / UTF-16BE / UTF-32LE / UTF-32BE.
-/// Without a BOM, bytes are treated as UTF-8. The BOM itself is not part of the
-/// returned character stream.
+/// Detects encoding per YAML 1.2.2 §5.2: BOM rows first, then null-pattern
+/// rows, else UTF-8. A leading BOM is not part of the returned character stream.
 pub(crate) fn decode_yaml_bytes(input: &[u8]) -> Result<String> {
+    // Explicit BOMs (longest / most specific first).
     if input.starts_with(&[0x00, 0x00, 0xFE, 0xFF]) {
-        decode_utf32(&input[4..], true)
-    } else if input.starts_with(&[0xFF, 0xFE, 0x00, 0x00]) {
-        decode_utf32(&input[4..], false)
-    } else if input.starts_with(&[0xFE, 0xFF]) {
-        decode_utf16(&input[2..], true)
-    } else if input.starts_with(&[0xFF, 0xFE]) {
-        decode_utf16(&input[2..], false)
-    } else if input.starts_with(&[0xEF, 0xBB, 0xBF]) {
-        decode_utf8(&input[3..])
-    } else {
-        decode_utf8(input)
+        return decode_utf32(&input[4..], true);
     }
+    if input.starts_with(&[0xFF, 0xFE, 0x00, 0x00]) {
+        return decode_utf32(&input[4..], false);
+    }
+    if input.starts_with(&[0xFE, 0xFF]) {
+        return decode_utf16(&input[2..], true);
+    }
+    if input.starts_with(&[0xFF, 0xFE]) {
+        return decode_utf16(&input[2..], false);
+    }
+    if input.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        return decode_utf8(&input[3..]);
+    }
+
+    // Null-pattern detection when there is no BOM.
+    if input.len() >= 4 {
+        if input[0] == 0x00 && input[1] == 0x00 && input[2] == 0x00 {
+            // `00 00 00 xx` → UTF-32BE
+            return decode_utf32(input, true);
+        }
+        if input[1] == 0x00 && input[2] == 0x00 && input[3] == 0x00 {
+            // `xx 00 00 00` → UTF-32LE
+            return decode_utf32(input, false);
+        }
+    }
+    if input.len() >= 2 {
+        if input[0] == 0x00 {
+            // `00 xx` → UTF-16BE
+            return decode_utf16(input, true);
+        }
+        if input[1] == 0x00 {
+            // `xx 00` → UTF-16LE
+            return decode_utf16(input, false);
+        }
+    }
+
+    decode_utf8(input)
 }
 
 fn decode_utf8(input: &[u8]) -> Result<String> {
