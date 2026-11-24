@@ -28,9 +28,9 @@ struct PossibleKey {
 /// (`- ` entries and single-line simple `key: value` pairs) and flow
 /// collections (`[...]`, `{...}`). Indentation is tracked so
 /// `BlockSequenceStart` / `BlockMappingStart` / `BlockEnd` tokens are emitted;
-/// inside flow collections indentation is ignored. Block scalars,
-/// multi-line plain scalars and complex or flow-collection keys are not yet
-/// supported.
+/// inside flow collections indentation is ignored. Multi-line plain and quoted
+/// scalars are folded per YAML 1.2.2 §8.1.3. Block scalars (`|` / `>`) and
+/// explicit keys (`?`) are not yet supported.
 #[derive(Debug)]
 pub(crate) struct Scanner<'a> {
     reader: Reader<'a>,

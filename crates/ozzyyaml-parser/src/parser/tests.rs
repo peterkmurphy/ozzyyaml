@@ -37,8 +37,12 @@ fn parse_exact_event_sequence() {
 }
 
 #[test]
-fn parse_second_scalar_is_error() {
-    assert!(matches!(parse_str("a\nb"), Err(crate::Error::Parse { .. })));
+fn parse_folded_plain_lines() {
+    // Multi-line plains fold (§8.1.3); they are not a second root document.
+    let evs = parse_str("a\nb\n").unwrap();
+    assert!(evs.iter().any(
+        |e| matches!(e, Event::Scalar { value, .. } if value == "a b")
+    ));
 }
 
 #[test]
@@ -68,9 +72,8 @@ fn last_mark_tracks_alias_position() {
 
 #[test]
 fn last_mark_unchanged_on_parse_error() {
-    // A second root is `Err`. That call must not move `last_mark`; the error
-    // carries its own mark, and the parser is fused afterward.
-    let mut p = Parser::new("a\nb\n").unwrap();
+    // An unexpected flow end is `Err`. That call must not move `last_mark`.
+    let mut p = Parser::new("]\n").unwrap();
     loop {
         let before = p.last_mark();
         match p.next_event() {

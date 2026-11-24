@@ -2,9 +2,9 @@
 
 ozzyyaml targets YAML 1.2.2 but is **not yet complete**.
 
-As of the 0.1.0 line, the event parser passes roughly 40% of
-[yaml-test-suite](https://github.com/yaml/yaml-test-suite) cases that ship
-`test.event` ground truth. Major gaps include multi-line scalar folding,
+The event parser’s allowlist is growing as language gaps close (see
+`crates/ozzyyaml-parser/tests/suite_allowlist.txt`). Multi-line plain and
+quoted scalar folding (§8.1.3) is implemented. Remaining major gaps include
 block scalars (`|` / `>`), explicit keys (`?`), the full double-quoted escape
 set, and UTF-16/32 streams.
 

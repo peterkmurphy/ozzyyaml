@@ -409,10 +409,10 @@ fn parser_is_fused_after_any_error() {
         "{a: [b] c: d}", // flow mapping: missing separator
         "[a: b [c]]",    // flow pair: error mid-collection
         "[a, ]]",        // stray closer
-        "- a\nb",        // block sequence followed by junk
+        "- a\n- [",      // unclosed flow after block entry
         "a: b: c",       // scanner error
         "!x!y a",        // undeclared tag handle
-        "a\nb",          // extra content after document
+        "]\n",           // unexpected flow end
         "{a: *}",        // scanner error inside flow
     ];
     for input in inputs {

@@ -1,27 +1,22 @@
-# yaml-test-suite case IDs that must pass (vendor/yaml-test-suite, `data` branch layout).
-# Only add IDs that already pass; never allowlist failing cases.
-AVM7
-HWV9
-98YD
-4GC6
-4UYU
-8MK2
-K54U
-27NA
-# Added via discover_passing_suite_cases (ignored test): rendered events exactly match test.event.
 229Q
 26DV
+27NA
 2AUY
 2EBW
 2LFX
 2SXE
 33X3
+36F6
 3ALJ
 3GZX
+3MYT
 3R3P
 3UYS
 4ABK
+4CQQ
+4GC6
 4RWC
+4UYU
 4V8U
 52DL
 54T7
@@ -42,6 +37,7 @@ K54U
 6LVF
 6SLA
 6WLZ
+6WPF
 6XDY
 6ZKB
 74H7
@@ -50,12 +46,18 @@ K54U
 7FWL
 7TMG
 7Z25
+82AN
 87E4
 8CWC
 8G76
+8KB6
+8MK2
 8QBE
+8UDB
 8XYN
 93JH
+98YD
+9BXH
 9DXL
 9FMG
 9J7A
@@ -63,6 +65,10 @@ K54U
 9SHH
 9U5K
 9WXW
+9YRD
+A984
+# Added via discover_passing_suite_cases (ignored test): rendered events exactly match test.event.
+AVM7
 AZW3
 BEC7
 BU8L
@@ -79,14 +85,19 @@ DC7X
 DHP8
 E76Z
 EHF6
+EX5H
+EXG3
 F2C7
 F3CP
+FBC9
 FH7J
 FQ7F
 FTA2
 FUP4
 H3Z8
 HMQ5
+HS5T
+HWV9
 J5UC
 J7PZ
 J7VC
@@ -96,7 +107,9 @@ JQ4R
 JR7V
 JS2J
 K4SU
+K54U
 KMK3
+KSS4
 L383
 L9U5
 LE5A
@@ -104,6 +117,8 @@ LP6E
 LQZ7
 M7NX
 MXS3
+NB6Z
+# Only add IDs that already pass; never allowlist failing cases.
 P76L
 P94K
 PBJ2
@@ -120,14 +135,18 @@ S7BG
 SSW6
 SYW4
 TE2A
+TL85
 U3C3
 U3XV
 U9NS
 UDM2
 UDR7
+UV7Q
 V55R
 WZ62
+XLQ9
 Y2GN
+# yaml-test-suite case IDs that must pass (vendor/yaml-test-suite, `data` branch layout).
 YD5X
 Z9M4
 ZF4X
