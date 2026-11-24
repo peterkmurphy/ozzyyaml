@@ -118,5 +118,6 @@ unsupported Python type to `dump` raises `TypeError`.
 
 ## See also
 
+- [Conformance status](conformance.md) — suite coverage and gaps
 - [Architecture](architecture.md) — how compose and emit work in Rust
 - Repository [README](../README.md)
