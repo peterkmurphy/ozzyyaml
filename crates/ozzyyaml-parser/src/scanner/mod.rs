@@ -8,6 +8,7 @@ use crate::reader::Reader;
 use crate::token::Token;
 
 mod block;
+mod block_scalar;
 mod document;
 mod flow;
 mod scalar;
@@ -23,14 +24,14 @@ struct PossibleKey {
 
 /// Converts characters from a [`Reader`] into [`Token`]s.
 ///
-/// Recognises plain/quoted scalars, anchors, aliases, tags, `%` directives,
-/// `---` / `...` document markers, and block collections
+/// Recognises plain/quoted scalars, block scalars (`|` / `>`), anchors, aliases,
+/// tags, `%` directives, `---` / `...` document markers, and block collections
 /// (`- ` entries and single-line simple `key: value` pairs) and flow
 /// collections (`[...]`, `{...}`). Indentation is tracked so
 /// `BlockSequenceStart` / `BlockMappingStart` / `BlockEnd` tokens are emitted;
 /// inside flow collections indentation is ignored. Multi-line plain and quoted
-/// scalars are folded per YAML 1.2.2 §8.1.3. Block scalars (`|` / `>`) and
-/// explicit keys (`?`) are not yet supported.
+/// scalars are folded per YAML 1.2.2 §8.1.3. Explicit keys (`?`) are not yet
+/// supported.
 #[derive(Debug)]
 pub(crate) struct Scanner<'a> {
     reader: Reader<'a>,
@@ -134,6 +135,10 @@ impl<'a> Scanner<'a> {
                 let value = self.scan_double_quoted(mark)?;
                 self.push_scalar(value, ScalarStyle::DoubleQuoted, mark);
                 self.quoted_end = Some(self.reader.mark().index);
+            }
+            '|' | '>' if self.flow_level == 0 => {
+                let (value, style) = self.scan_block_scalar(mark)?;
+                self.push_scalar(value, style, mark);
             }
             _ => {
                 self.save_possible_key(mark);

@@ -3,9 +3,9 @@
 ozzyyaml targets YAML 1.2.2 but is **not yet complete**.
 
 The event parser’s allowlist is growing as language gaps close (see
-`crates/ozzyyaml-parser/tests/suite_allowlist.txt`). Multi-line plain and
-quoted scalar folding (§8.1.3) is implemented. Remaining major gaps include
-block scalars (`|` / `>`), explicit keys (`?`), the full double-quoted escape
+`crates/ozzyyaml-parser/tests/suite_allowlist.txt`). Multi-line plain/quoted
+folding (§8.1.3) and block scalars `|` / `>` (§8.1.4–§8.1.6) are implemented.
+Remaining major gaps include explicit keys (`?`), the full double-quoted escape
 set, and UTF-16/32 streams.
 
 Track design:
