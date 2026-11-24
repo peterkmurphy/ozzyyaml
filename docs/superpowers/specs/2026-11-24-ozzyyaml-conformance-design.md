@@ -1,7 +1,7 @@
 # ozzyyaml YAML 1.2.2 conformance track — design
 
 **Date:** 2026-11-24  
-**Status:** Approved for planning (pending written-spec review)  
+**Status:** Approved — implementation plan at `docs/superpowers/plans/2026-11-24-ozzyyaml-conformance.md`  
 **Baseline:** `main` / 0.1.0 line; audit in the known-deviations note (parser ~39.6% of suite cases with `test.event`)
 
 ## Problem
