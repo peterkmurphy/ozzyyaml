@@ -1,7 +1,7 @@
 //! Document markers (`---`, `...`), `%` directives and `!` tags.
 
 use super::{scan_error, Scanner};
-use crate::chars::is_flow_indicator;
+use crate::chars::{tag_char_len_at, uri_char_len_at};
 use crate::error::Result;
 use crate::mark::Mark;
 use crate::token::Token;
@@ -63,10 +63,24 @@ impl Scanner<'_> {
             self.reader.bump();
             let mut uri = String::new();
             loop {
-                match self.reader.bump() {
-                    Some('>') => break,
-                    Some(c) if !c.is_whitespace() => uri.push(c),
-                    _ => return Err(scan_error("unterminated verbatim tag".into(), mark)),
+                match self.reader.peek() {
+                    Some('>') => {
+                        self.reader.bump();
+                        break;
+                    }
+                    Some(_) => {
+                        let rest = self.reader.rest();
+                        let Some(len) = uri_char_len_at(rest) else {
+                            return Err(scan_error(
+                                "invalid character in verbatim tag URI".into(),
+                                self.reader.mark(),
+                            ));
+                        };
+                        for _ in 0..len {
+                            uri.push(self.reader.bump().expect("uri char"));
+                        }
+                    }
+                    None => return Err(scan_error("unterminated verbatim tag".into(), mark)),
                 }
             }
             if uri.is_empty() {
@@ -74,10 +88,34 @@ impl Scanner<'_> {
             }
             (String::new(), uri)
         } else {
+            // Handle punctuation `!` is allowed while scanning; suffix chars are ns-tag-char.
             let mut word = String::new();
-            while let Some(c) = self.reader.peek().filter(|&c| is_tag_char(c)) {
-                word.push(c);
-                self.reader.bump();
+            loop {
+                let rest = self.reader.rest();
+                if rest.starts_with('!') {
+                    word.push('!');
+                    self.reader.bump();
+                    continue;
+                }
+                let Some(len) = tag_char_len_at(rest) else {
+                    // Flow indicators / `:` end the tag (e.g. `!!str,` in a flow map).
+                    // Other `ns-char` values are illegal inside a tag (e.g. raw non-ASCII).
+                    if let Some(c) = self.reader.peek() {
+                        if crate::chars::is_flow_indicator(c) || c == ':' {
+                            break;
+                        }
+                        if crate::chars::is_ns_char(c) {
+                            return Err(scan_error(
+                                format!("invalid tag character U+{:04X}", c as u32),
+                                self.reader.mark(),
+                            ));
+                        }
+                    }
+                    break;
+                };
+                for _ in 0..len {
+                    word.push(self.reader.bump().expect("tag char"));
+                }
             }
             match word.rfind('!') {
                 Some(i) => (format!("!{}", &word[..=i]), word[i + 1..].to_string()),
@@ -91,8 +129,4 @@ impl Scanner<'_> {
         });
         Ok(())
     }
-}
-
-fn is_tag_char(c: char) -> bool {
-    !c.is_whitespace() && !is_flow_indicator(c)
 }

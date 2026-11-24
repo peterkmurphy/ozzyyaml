@@ -37,3 +37,23 @@ fn double_quoted_accepts_del_unescaped() {
 fn quoted_at_is_ok() {
     assert!(parse_str("\"@text\"\n").is_ok());
 }
+
+#[test]
+fn tag_rejects_raw_non_ascii() {
+    assert!(parse_str("!汉 value\n").is_err());
+}
+
+#[test]
+fn tag_accepts_percent_encoded() {
+    assert!(parse_str("!%E6%B1%89 value\n").is_ok());
+}
+
+#[test]
+fn tag_rejects_non_tag_char_glued_to_suffix() {
+    assert!(parse_str("!foo汉\n").is_err());
+}
+
+#[test]
+fn verbatim_tag_rejects_non_uri() {
+    assert!(parse_str("!<汉> value\n").is_err());
+}
