@@ -313,19 +313,51 @@ impl Scanner<'_> {
         }
     }
 
-    /// Decodes the character after a backslash (simple escapes only).
+    /// Decodes the character after a backslash (YAML 1.2.2 §7.3.2 `c-ns-esc-char`).
     fn scan_escape(&mut self) -> Result<char> {
         let mark = self.reader.mark();
         let decoded = match self.reader.bump() {
             Some('0') => '\0',
+            Some('a') => '\u{7}',
+            Some('b') => '\u{8}',
+            Some('t' | '\t') => '\t',
             Some('n') => '\n',
+            Some('v') => '\u{b}',
+            Some('f') => '\u{c}',
             Some('r') => '\r',
-            Some('t') => '\t',
-            Some(c @ ('"' | '\\' | '/' | ' ')) => c,
+            Some('e') => '\u{1b}',
+            Some(' ') => ' ',
+            Some('"') => '"',
+            Some('/') => '/',
+            Some('\\') => '\\',
+            Some('N') => '\u{85}',
+            Some('_') => '\u{a0}',
+            Some('L') => '\u{2028}',
+            Some('P') => '\u{2029}',
+            Some('x') => self.scan_hex_escape(mark, 2)?,
+            Some('u') => self.scan_hex_escape(mark, 4)?,
+            Some('U') => self.scan_hex_escape(mark, 8)?,
             Some(c) => return Err(scan_error(format!("invalid escape '\\{c}'"), mark)),
             None => return Err(scan_error("unterminated escape".into(), mark)),
         };
         Ok(decoded)
+    }
+
+    /// Reads `width` hex digits and returns the corresponding Unicode scalar.
+    fn scan_hex_escape(&mut self, mark: Mark, width: usize) -> Result<char> {
+        let mut code = 0u32;
+        for _ in 0..width {
+            let digit = match self.reader.bump() {
+                Some(c) => c
+                    .to_digit(16)
+                    .ok_or_else(|| scan_error(format!("invalid hex digit '{c}' in escape"), mark))?,
+                None => return Err(scan_error("unterminated hex escape".into(), mark)),
+            };
+            code = (code << 4) | digit;
+        }
+        char::from_u32(code).ok_or_else(|| {
+            scan_error(format!("escape is not a valid Unicode scalar value U+{code:X}"), mark)
+        })
     }
 }
 

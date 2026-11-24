@@ -31,7 +31,12 @@ pub(crate) fn format_string(s: &str) -> String {
 }
 
 fn is_special_char(c: char) -> bool {
-    c.is_control() || matches!(c, '\u{feff}' | '\u{2028}' | '\u{2029}')
+    // Characters that must (or should) use double-quoted escapes.
+    c.is_control()
+        || matches!(
+            c,
+            '\u{85}' | '\u{a0}' | '\u{feff}' | '\u{2028}' | '\u{2029}'
+        )
 }
 
 fn needs_double_quotes(s: &str) -> bool {
@@ -63,6 +68,7 @@ fn needs_single_quotes(s: &str) -> bool {
     !matches!(ozzyyaml::from_str(s), Ok(Value::String(ref back)) if back == s)
 }
 
+/// Double-quoted form using the same escape set the parser accepts (§7.3.2).
 fn double_quoted(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
@@ -70,15 +76,27 @@ fn double_quoted(s: &str) -> String {
         match c {
             '"' => out.push_str("\\\""),
             '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
+            '\0' => out.push_str("\\0"),
+            '\u{7}' => out.push_str("\\a"),
+            '\u{8}' => out.push_str("\\b"),
             '\t' => out.push_str("\\t"),
+            '\n' => out.push_str("\\n"),
+            '\u{b}' => out.push_str("\\v"),
+            '\u{c}' => out.push_str("\\f"),
+            '\r' => out.push_str("\\r"),
+            '\u{1b}' => out.push_str("\\e"),
+            '\u{85}' => out.push_str("\\N"),
+            '\u{a0}' => out.push_str("\\_"),
+            '\u{2028}' => out.push_str("\\L"),
+            '\u{2029}' => out.push_str("\\P"),
             c if is_special_char(c) => {
                 let n = c as u32;
                 if n <= 0xff {
                     out.push_str(&format!("\\x{n:02x}"));
-                } else {
+                } else if n <= 0xffff {
                     out.push_str(&format!("\\u{n:04x}"));
+                } else {
+                    out.push_str(&format!("\\U{n:08x}"));
                 }
             }
             c => out.push(c),
@@ -86,4 +104,19 @@ fn double_quoted(s: &str) -> String {
     }
     out.push('"');
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn emits_named_escape_for_backspace() {
+        assert_eq!(double_quoted("\u{8}"), "\"\\b\"");
+    }
+
+    #[test]
+    fn emits_hex_for_other_controls() {
+        assert_eq!(double_quoted("\u{1}"), "\"\\x01\"");
+    }
 }
