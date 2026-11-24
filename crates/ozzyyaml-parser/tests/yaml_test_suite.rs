@@ -98,6 +98,23 @@ fn allowlist() -> Vec<String> {
         .collect()
 }
 
+fn valid_event_suite_ids(root: &std::path::Path) -> Vec<String> {
+    let mut ids: Vec<_> = std::fs::read_dir(root)
+        .expect("suite root")
+        .filter_map(Result::ok)
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|id| {
+            let d = root.join(id);
+            d.join("in.yaml").is_file()
+                && d.join("test.event").is_file()
+                && !d.join("error").exists()
+        })
+        .collect();
+    ids.sort();
+    ids
+}
+
 #[test]
 fn allowlisted_cases_match_expected_events() {
     let root = suite_root();
@@ -134,6 +151,40 @@ fn allowlisted_cases_match_expected_events() {
     }
 
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+#[ignore = "Phase 0 report: run with --ignored --nocapture"]
+fn report_all_valid_suite_failures() {
+    let root = suite_root();
+    let allow: std::collections::HashSet<_> = allowlist().into_iter().collect();
+    let mut fail = 0usize;
+    let mut pass = 0usize;
+    for id in valid_event_suite_ids(&root) {
+        let dir = root.join(&id);
+        let input = std::fs::read_to_string(dir.join("in.yaml")).unwrap();
+        let expected: Vec<String> = std::fs::read_to_string(dir.join("test.event"))
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect();
+        match parse_str(&input) {
+            Ok(ev) if render(&ev) == expected => {
+                pass += 1;
+            }
+            Ok(ev) => {
+                fail += 1;
+                let on_allow = allow.contains(&id);
+                println!("FAIL {id} mismatch allowlisted={on_allow}");
+                let _ = ev;
+            }
+            Err(e) => {
+                fail += 1;
+                println!("FAIL {id} error allowlisted={} {e}", allow.contains(&id));
+            }
+        }
+    }
+    println!("SUMMARY pass={pass} fail={fail}");
 }
 
 /// Prints IDs of top-level suite cases (in.yaml + test.event, no `error` marker) whose
