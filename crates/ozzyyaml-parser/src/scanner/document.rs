@@ -57,6 +57,7 @@ impl Scanner<'_> {
     /// Scans a tag: `!`, `!suffix`, `!!suffix`, `!handle!suffix` or `!<uri>`.
     pub(super) fn fetch_tag(&mut self, mark: Mark) -> Result<()> {
         self.save_possible_key(mark);
+        self.simple_key_allowed = false;
         self.reader.bump(); // '!'
         let (handle, suffix) = if self.reader.peek() == Some('<') {
             self.reader.bump();

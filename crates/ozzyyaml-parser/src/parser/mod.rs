@@ -149,6 +149,11 @@ impl<'a> Parser<'a> {
                     self.state = State::BlockMappingValue;
                     self.parse_node(true).map(Some)
                 }
+                Some(Token::Value { .. }) => {
+                    // Empty key: `: value` or lone `:` after a prior entry.
+                    self.state = State::BlockMappingValue;
+                    Ok(Some(empty_scalar(None, None)))
+                }
                 Some(Token::BlockEnd { .. }) => {
                     self.bump();
                     self.end_collection(Event::MappingEnd)

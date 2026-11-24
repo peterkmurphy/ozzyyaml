@@ -26,12 +26,11 @@ struct PossibleKey {
 ///
 /// Recognises plain/quoted scalars, block scalars (`|` / `>`), anchors, aliases,
 /// tags, `%` directives, `---` / `...` document markers, and block collections
-/// (`- ` entries and single-line simple `key: value` pairs) and flow
+/// (`- ` entries, explicit `?` keys, and simple `key: value` pairs) and flow
 /// collections (`[...]`, `{...}`). Indentation is tracked so
 /// `BlockSequenceStart` / `BlockMappingStart` / `BlockEnd` tokens are emitted;
 /// inside flow collections indentation is ignored. Multi-line plain and quoted
-/// scalars are folded per YAML 1.2.2 §8.1.3. Explicit keys (`?`) are not yet
-/// supported.
+/// scalars are folded per YAML 1.2.2 §8.1.3.
 #[derive(Debug)]
 pub(crate) struct Scanner<'a> {
     reader: Reader<'a>,
@@ -39,7 +38,10 @@ pub(crate) struct Scanner<'a> {
     tokens_taken: usize,
     /// Columns (1-based) of currently open block collections.
     indents: Vec<u32>,
+    /// Possible simple key at the current flow level.
     possible_key: Option<PossibleKey>,
+    /// Possible simple keys of enclosing flow levels (outer → inner).
+    possible_key_stack: Vec<Option<PossibleKey>>,
     /// Number of currently open flow collections (`[` / `{`).
     flow_level: usize,
     /// Reader index just past the most recent quoted scalar; a `:` directly
@@ -47,6 +49,8 @@ pub(crate) struct Scanner<'a> {
     quoted_end: Option<usize>,
     /// Line of the most recent block-level `:` value indicator.
     value_line: Option<u32>,
+    /// Whether a simple key (or block `?` / `-` / empty-key `:`) may start here.
+    simple_key_allowed: bool,
     done: bool,
 }
 
@@ -58,9 +62,11 @@ impl<'a> Scanner<'a> {
             tokens_taken: 0,
             indents: Vec::new(),
             possible_key: None,
+            possible_key_stack: Vec::new(),
             flow_level: 0,
             quoted_end: None,
             value_line: None,
+            simple_key_allowed: true,
             done: false,
         }
     }
@@ -87,10 +93,15 @@ impl<'a> Scanner<'a> {
     /// A queued token that may still become a key can't be released yet.
     fn need_more_tokens(&self) -> bool {
         !self.done
-            && (self.queue.is_empty()
-                || self
-                    .possible_key
-                    .is_some_and(|k| k.token_number == self.tokens_taken))
+            && (self.queue.is_empty() || self.pending_simple_key_at_front())
+    }
+
+    /// True if the next token to yield is still a candidate simple key
+    /// (current level or an enclosing flow level).
+    fn pending_simple_key_at_front(&self) -> bool {
+        let at_front = |k: &PossibleKey| k.token_number == self.tokens_taken;
+        self.possible_key.as_ref().is_some_and(at_front)
+            || self.possible_key_stack.iter().flatten().any(at_front)
     }
 
     fn fetch_next_token(&mut self) -> Result<()> {
@@ -103,6 +114,7 @@ impl<'a> Scanner<'a> {
             debug_assert!(self.reader.is_eof());
             self.unroll_indent(0, mark);
             self.possible_key = None;
+            self.possible_key_stack.clear();
             self.done = true;
             return Ok(());
         };
@@ -122,6 +134,7 @@ impl<'a> Scanner<'a> {
             '-' if self.flow_level == 0 && self.indicator_followed_by_blank() => {
                 self.fetch_block_entry(mark)
             }
+            '?' if self.indicator_followed_by_blank() => self.fetch_key(mark)?,
             ':' if self.is_value_indicator(mark) => self.fetch_value(mark)?,
             '&' | '*' => self.fetch_anchor_or_alias(c, mark)?,
             '\'' => {
@@ -129,21 +142,28 @@ impl<'a> Scanner<'a> {
                 let value = self.scan_single_quoted(mark)?;
                 self.push_scalar(value, ScalarStyle::SingleQuoted, mark);
                 self.quoted_end = Some(self.reader.mark().index);
+                self.simple_key_allowed = false;
             }
             '"' => {
                 self.save_possible_key(mark);
                 let value = self.scan_double_quoted(mark)?;
                 self.push_scalar(value, ScalarStyle::DoubleQuoted, mark);
                 self.quoted_end = Some(self.reader.mark().index);
+                self.simple_key_allowed = false;
             }
             '|' | '>' if self.flow_level == 0 => {
                 let (value, style) = self.scan_block_scalar(mark)?;
                 self.push_scalar(value, style, mark);
+                self.simple_key_allowed = true;
             }
             _ => {
                 self.save_possible_key(mark);
+                let start_line = mark.line;
                 let value = self.scan_plain();
                 self.push_scalar(value, ScalarStyle::Plain, mark);
+                // Multiline plain scalars allow a following simple key (libyaml).
+                self.simple_key_allowed =
+                    self.flow_level == 0 && self.reader.mark().line != start_line;
             }
         }
         Ok(())
@@ -187,6 +207,7 @@ impl<'a> Scanner<'a> {
                 ));
             }
         }
+        self.simple_key_allowed = false;
         self.queue.push_back(if indicator == '&' {
             Token::Anchor { name, mark }
         } else {
@@ -196,14 +217,21 @@ impl<'a> Scanner<'a> {
     }
 
     fn skip_whitespace_and_comments(&mut self) {
-        while let Some(c) = self.reader.peek() {
-            match c {
-                ' ' | '\t' | '\n' => {
-                    self.reader.bump();
-                }
-                '#' => self.skip_to_end_of_line(),
-                _ => break,
+        loop {
+            while matches!(self.reader.peek(), Some(' ' | '\t')) {
+                self.reader.bump();
             }
+            if self.reader.peek() == Some('#') {
+                self.skip_to_end_of_line();
+            }
+            if self.reader.peek() == Some('\n') {
+                self.reader.bump();
+                if self.flow_level == 0 {
+                    self.simple_key_allowed = true;
+                }
+                continue;
+            }
+            break;
         }
     }
 

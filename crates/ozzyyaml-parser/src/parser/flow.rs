@@ -1,6 +1,6 @@
 //! Flow-collection parsing states.
 
-use super::node::unexpected_or_eof;
+use super::node::{empty_scalar, unexpected_or_eof};
 use super::{Parser, State};
 use crate::error::Result;
 use crate::event::Event;
@@ -53,8 +53,11 @@ impl Parser<'_> {
         if matches!(self.peek()?, Some(Token::Key { .. })) {
             self.bump();
             self.parse_node(true).map(Some)
+        } else if matches!(self.peek()?, Some(Token::Value { .. })) {
+            // Empty key: `: value` inside `{...}`.
+            Ok(Some(empty_scalar(None, None)))
         } else {
-            // `{a, b: 1}`: a key with no value.
+            // `{a, b: 1}`: a key with no explicit `?` (may still have a value).
             self.parse_node(false).map(Some)
         }
     }
