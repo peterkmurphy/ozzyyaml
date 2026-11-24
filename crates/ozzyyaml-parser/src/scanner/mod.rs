@@ -47,8 +47,6 @@ pub(crate) struct Scanner<'a> {
     /// Reader index just past the most recent quoted scalar; a `:` directly
     /// there is a value indicator inside flow collections (`{"a":1}`).
     quoted_end: Option<usize>,
-    /// Line of the most recent block-level `:` value indicator.
-    value_line: Option<u32>,
     /// Whether a simple key (or block `?` / `-` / empty-key `:`) may start here.
     simple_key_allowed: bool,
     done: bool,
@@ -65,7 +63,6 @@ impl<'a> Scanner<'a> {
             possible_key_stack: Vec::new(),
             flow_level: 0,
             quoted_end: None,
-            value_line: None,
             simple_key_allowed: true,
             done: false,
         }

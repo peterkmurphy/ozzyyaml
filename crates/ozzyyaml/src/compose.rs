@@ -181,7 +181,8 @@ impl Composer {
                     style,
                 } => {
                     let plain = style == ScalarStyle::Plain;
-                    let resolved = resolve_scalar(&value, tag.as_deref(), plain);
+                    let mark = parser.last_mark();
+                    let resolved = resolve_scalar(&value, tag.as_deref(), plain, mark)?;
                     let node = Rc::new(resolved);
                     if let Some(name) = anchor {
                         self.register_anchor(name, Rc::clone(&node), parser.last_mark())?;

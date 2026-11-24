@@ -379,7 +379,8 @@ fn nesting_limit_error_is_reported_when_event_is_pulled() {
 }
 
 #[test]
-fn same_line_nested_implicit_mapping_is_rejected() {
+fn illegal_same_line_nested_implicit_mapping_is_rejected() {
+    // Block `a: b: c` is not permitted (same as libyaml / PyYAML).
     for input in ["a: b: c", "a: b: c\n", "- a: b: c", "x:\n  a: b: c"] {
         let err = parse_all(input, Limits::default()).unwrap_err();
         assert!(
@@ -390,6 +391,20 @@ fn same_line_nested_implicit_mapping_is_rejected() {
 }
 
 #[test]
+fn nested_mapping_as_explicit_key_value_is_accepted() {
+    // `? a` / `: b: c` nests `{b: c}` as the value — grammar allows this.
+    let events = parse_all("? a\n: b: c\n", Limits::default()).unwrap();
+    assert!(
+        events
+            .iter()
+            .filter(|e| matches!(e, Event::MappingStart { .. }))
+            .count()
+            >= 2,
+        "{events:?}"
+    );
+}
+
+#[test]
 fn valid_nested_mappings_are_still_accepted() {
     for input in [
         "a:\n  b: c",
@@ -397,6 +412,7 @@ fn valid_nested_mappings_are_still_accepted() {
         "a: {b: c}",
         "a: [b: c]",
         "a: 'b'\nc: d",
+        "? a\n: b: c\n",
     ] {
         parse_all(input, Limits::default()).unwrap_or_else(|e| panic!("{input:?}: {e}"));
     }

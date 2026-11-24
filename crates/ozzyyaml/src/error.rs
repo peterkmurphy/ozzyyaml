@@ -51,6 +51,14 @@ pub enum Error {
         /// Human-readable explanation.
         message: String,
     },
+    /// A Core-schema tag was applied to a value that does not match it.
+    #[error("invalid value for tag `{tag}` at {mark}")]
+    InvalidTaggedValue {
+        /// Resolved tag URI (e.g. `tag:yaml.org,2002:int`).
+        tag: String,
+        /// Source position of the scalar.
+        mark: Mark,
+    },
 }
 
 /// Result alias for this crate.

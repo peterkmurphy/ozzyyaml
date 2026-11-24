@@ -123,6 +123,33 @@ fn core_rejects_yes_as_bool() {
 }
 
 #[test]
+fn strict_int_tag_rejects_non_int() {
+    let err = from_str("!!int twelve\n").unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("int") || msg.contains("tag"), "{msg}");
+}
+
+#[test]
+fn strict_int_tag_accepts_int() {
+    assert!(matches!(from_str("!!int 42\n").unwrap(), Value::Int(42)));
+}
+
+#[test]
+fn strict_str_tag_keeps_non_int_text() {
+    assert_eq!(
+        from_str("!!str twelve\n").unwrap(),
+        Value::String("twelve".into())
+    );
+}
+
+#[test]
+fn strict_bool_tag_rejects_yes() {
+    let err = from_str("!!bool yes\n").unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("bool") || msg.contains("tag"), "{msg}");
+}
+
+#[test]
 fn from_slice_with_limits_parses() {
     assert_eq!(
         from_slice_with_limits(b"7\n", Limits::default()).unwrap(),

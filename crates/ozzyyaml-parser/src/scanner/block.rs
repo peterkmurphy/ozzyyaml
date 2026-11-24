@@ -65,15 +65,8 @@ impl Scanner<'_> {
 
     pub(super) fn fetch_value(&mut self, mark: Mark) -> Result<()> {
         if let Some(key) = self.possible_key.take() {
-            if self.flow_level == 0 {
-                if self.value_line == Some(key.mark.line) {
-                    return Err(scan_error(
-                        "nested implicit mapping on the same line is not allowed".into(),
-                        key.mark,
-                    ));
-                }
-                self.value_line = Some(mark.line);
-            }
+            // Illegal same-line nests like `a: b: c` are rejected because
+            // `simple_key_allowed` is false after the first `:`, matching libyaml.
             if key.token_number < self.tokens_taken {
                 return Err(scan_error(
                     "simple key cannot be applied; token already consumed".into(),

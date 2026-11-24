@@ -1,6 +1,8 @@
 //! YAML 1.2.2 Core schema scalar construction.
 
+use crate::error::{Error, Result};
 use crate::value::Value;
+use ozzyyaml_parser::Mark;
 
 const NULL_TAG: &str = "tag:yaml.org,2002:null";
 const BOOL_TAG: &str = "tag:yaml.org,2002:bool";
@@ -27,26 +29,38 @@ pub(crate) fn resolve_plain(s: &str) -> Value {
 
 /// Resolve a scalar given its resolved tag URI (if any) and style.
 ///
-/// Unknown non-Core tags are ignored for typing (value kept as string when
-/// the style would otherwise stay a string; plain still runs Core resolution
-/// only when untagged).
-pub(crate) fn resolve_scalar(value: &str, tag: Option<&str>, plain: bool) -> Value {
+/// Known Core tags are validated strictly: a mismatch is [`Error::InvalidTaggedValue`].
+/// Unknown non-Core tags are ignored for typing (plain still runs Core resolution
+/// when untagged / unknown-tagged).
+pub(crate) fn resolve_scalar(
+    value: &str,
+    tag: Option<&str>,
+    plain: bool,
+    mark: Mark,
+) -> Result<Value> {
     match tag {
-        Some(NULL_TAG) => try_null(value).unwrap_or(Value::Null),
-        Some(BOOL_TAG) => try_bool(value).unwrap_or_else(|| Value::String(value.to_owned())),
-        Some(INT_TAG) => try_int(value).unwrap_or_else(|| Value::String(value.to_owned())),
-        Some(FLOAT_TAG) => try_float(value).unwrap_or_else(|| Value::String(value.to_owned())),
-        Some(STR_TAG) => Value::String(value.to_owned()),
+        Some(NULL_TAG) => try_null(value).ok_or_else(|| tag_err(NULL_TAG, mark)),
+        Some(BOOL_TAG) => try_bool(value).ok_or_else(|| tag_err(BOOL_TAG, mark)),
+        Some(INT_TAG) => try_int(value).ok_or_else(|| tag_err(INT_TAG, mark)),
+        Some(FLOAT_TAG) => try_float(value).ok_or_else(|| tag_err(FLOAT_TAG, mark)),
+        Some(STR_TAG) => Ok(Value::String(value.to_owned())),
         Some(_) => {
             // Unknown tag: ignore for typing.
             if plain {
-                resolve_plain(value)
+                Ok(resolve_plain(value))
             } else {
-                Value::String(value.to_owned())
+                Ok(Value::String(value.to_owned()))
             }
         }
-        None if plain => resolve_plain(value),
-        None => Value::String(value.to_owned()),
+        None if plain => Ok(resolve_plain(value)),
+        None => Ok(Value::String(value.to_owned())),
+    }
+}
+
+fn tag_err(tag: &str, mark: Mark) -> Error {
+    Error::InvalidTaggedValue {
+        tag: tag.to_owned(),
+        mark,
     }
 }
 
@@ -187,6 +201,14 @@ fn parse_digits(digits: &str, radix: u32) -> Option<i64> {
 mod tests {
     use super::*;
 
+    fn mark() -> Mark {
+        Mark {
+            index: 0,
+            line: 1,
+            column: 1,
+        }
+    }
+
     #[test]
     fn plain_core_table() {
         let cases: &[(&str, Value)] = &[
@@ -221,7 +243,7 @@ mod tests {
     #[test]
     fn tagged_str_stays_string() {
         assert_eq!(
-            resolve_scalar("42", Some(STR_TAG), true),
+            resolve_scalar("42", Some(STR_TAG), true, mark()).unwrap(),
             Value::String("42".into())
         );
     }
@@ -229,8 +251,13 @@ mod tests {
     #[test]
     fn quoted_untagged_stays_string() {
         assert_eq!(
-            resolve_scalar("true", None, false),
+            resolve_scalar("true", None, false, mark()).unwrap(),
             Value::String("true".into())
         );
+    }
+
+    #[test]
+    fn strict_int_tag_errors_on_mismatch() {
+        assert!(resolve_scalar("twelve", Some(INT_TAG), true, mark()).is_err());
     }
 }
