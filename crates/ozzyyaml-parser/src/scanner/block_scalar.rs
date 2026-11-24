@@ -54,6 +54,11 @@ impl Scanner<'_> {
         let mut leading_blank = false;
         while self.reader.mark().column.saturating_sub(1) == indent && self.reader.peek().is_some()
         {
+            // `---` / `...` at column 1 end the document (and this scalar).
+            // Needed for zero-indent block scalars (suite W4TN / spec ex. 9.5).
+            if self.at_document_marker_line() {
+                break;
+            }
             // More-indented / blank-leading lines affect folded joining.
             let trailing_blank = matches!(self.reader.peek(), Some(' ' | '\t'));
 
@@ -238,6 +243,25 @@ impl Scanner<'_> {
         }
 
         Ok(())
+    }
+
+    /// True if the reader is at column 1 on a `---` / `...` document marker line.
+    fn at_document_marker_line(&self) -> bool {
+        if self.reader.mark().column != 1 {
+            return false;
+        }
+        let rest = self.reader.rest();
+        let marker = if rest.starts_with("---") {
+            "---"
+        } else if rest.starts_with("...") {
+            "..."
+        } else {
+            return false;
+        };
+        match rest[marker.len()..].chars().next() {
+            None | Some(' ' | '\t' | '\n' | '\r') => true,
+            Some(_) => false,
+        }
     }
 }
 

@@ -5,8 +5,9 @@ ozzyyaml targets YAML 1.2.2 but is **not yet complete**.
 The event parser’s allowlist is growing as language gaps close (see
 `crates/ozzyyaml-parser/tests/suite_allowlist.txt`). Multi-line plain/quoted
 folding (§8.1.3), block scalars `|` / `>` (§8.1.4–§8.1.6), the full
-double-quoted escape set (§7.3.2), and explicit keys (`?`) are implemented.
-Remaining major gaps include directive edge cases and UTF-16/32 streams.
+double-quoted escape set (§7.3.2), explicit keys (`?`), and `%YAML`/`%TAG`
+directive validation are implemented. Remaining major gaps include UTF-16/32
+streams and a few policy edge cases.
 
 Track design:
 [superpowers/specs/2026-11-24-ozzyyaml-conformance-design.md](superpowers/specs/2026-11-24-ozzyyaml-conformance-design.md).  
