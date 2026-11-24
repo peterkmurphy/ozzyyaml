@@ -130,11 +130,10 @@ fn anchor_name_stops_before_quoted_scalar() {
 }
 
 #[test]
-fn anchor_glued_to_quote_is_scan_error() {
-    assert!(matches!(
-        scanner("&a\"q\"").next_token(),
-        Err(Error::Scan { .. })
-    ));
+fn anchor_name_includes_quote_chars_per_spec() {
+    // [102]: `"` is an ns-anchor-char, so it belongs to the name.
+    assert_eq!(kinds("&a\"q\""), ["&a\"q\""]);
+    assert_eq!(kinds("*a'b#c:d"), ["*a'b#c:d"]);
 }
 
 #[test]

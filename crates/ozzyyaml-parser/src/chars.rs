@@ -159,14 +159,9 @@ pub(crate) fn tag_char_len_at(s: &str) -> Option<usize> {
     }
 }
 
-/// Practical anchor name character (not `[102]`; deferred). Kept for current scanner.
+/// `[102] ns-anchor-char ::= ns-char - c-flow-indicator`.
 pub(crate) fn is_anchor_char(c: char) -> bool {
-    is_printable(c)
-        && !matches!(
-            c,
-            ' ' | '\t' | '\n' | '\r' | '\u{85}' | '"' | '\'' | '#' | '\u{FEFF}'
-        )
-        && !is_flow_indicator(c)
+    is_ns_char(c) && !is_flow_indicator(c)
 }
 
 #[cfg(test)]
@@ -244,12 +239,22 @@ mod tests {
     }
 
     #[test]
+    fn ns_anchor_char_matches_spec() {
+        assert!(is_anchor_char('"'));
+        assert!(is_anchor_char('\''));
+        assert!(is_anchor_char(':'));
+        assert!(is_anchor_char('#'));
+        assert!(!is_anchor_char(','));
+        assert!(!is_anchor_char(' '));
+    }
+
+    #[test]
     fn anchor_chars_include_unicode_but_not_space_or_flow_indicators() {
-        for c in ['a', '-', '_', '汉', '😀', 'é', ':'] {
+        for c in ['a', '-', '_', '汉', '😀', 'é', ':', '"', '\'', '#'] {
             assert!(is_anchor_char(c), "{c:?}");
         }
         for c in [
-            ' ', '\t', '\n', ',', '[', ']', '{', '}', '"', '\'', '#', '\u{FEFF}', '\u{0}',
+            ' ', '\t', '\n', ',', '[', ']', '{', '}', '\u{FEFF}', '\u{0}',
         ] {
             assert!(!is_anchor_char(c), "{c:?}");
         }
