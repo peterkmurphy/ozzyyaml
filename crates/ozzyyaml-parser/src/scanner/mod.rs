@@ -123,6 +123,12 @@ impl<'a> Scanner<'a> {
             self.unroll_indent(mark.column, mark);
         }
         match c {
+            '\u{FEFF}' => {
+                return Err(scan_error(
+                    "byte order mark inside document".into(),
+                    mark,
+                ));
+            }
             '%' if mark.column == 1 && self.flow_level == 0 => self.fetch_directive(mark),
             '!' => self.fetch_tag(mark)?,
             '[' | '{' => self.fetch_flow_collection_start(c, mark),

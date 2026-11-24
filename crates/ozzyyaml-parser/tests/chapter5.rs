@@ -57,3 +57,18 @@ fn tag_rejects_non_tag_char_glued_to_suffix() {
 fn verbatim_tag_rejects_non_uri() {
     assert!(parse_str("!<汉> value\n").is_err());
 }
+
+#[test]
+fn bom_inside_document_errors() {
+    let err = parse_str("- a\n\u{feff}- b\n").unwrap_err();
+    let msg = err.to_string().to_lowercase();
+    assert!(
+        msg.contains("byte order") || msg.contains("bom") || msg.contains("feff"),
+        "{msg}"
+    );
+}
+
+#[test]
+fn bom_inside_double_quoted_ok() {
+    assert!(parse_str("\"a\u{feff}b\"\n").is_ok());
+}
