@@ -1,7 +1,7 @@
 //! Plain, single-quoted and double-quoted scalar scanning (with line folding).
 
 use super::{scan_error, unterminated, Scanner};
-use crate::chars::is_flow_indicator;
+use crate::chars::{is_flow_indicator, is_hex_digit, is_nb_char, is_nb_json};
 use crate::error::Result;
 use crate::mark::Mark;
 
@@ -16,7 +16,7 @@ impl Scanner<'_> {
     }
 
     /// Reads a plain scalar, folding line breaks per YAML 1.2.2 §8.1.3.
-    pub(super) fn scan_plain(&mut self) -> String {
+    pub(super) fn scan_plain(&mut self) -> Result<String> {
         let min_indent = self.plain_min_indent();
         let mut value = String::new();
         loop {
@@ -27,6 +27,12 @@ impl Scanner<'_> {
                 let is_value = c == ':' && self.is_plain_value_indicator();
                 if c == '\n' || starts_comment || flow_stop || is_value {
                     break;
+                }
+                if !is_nb_char(c) {
+                    return Err(scan_error(
+                        format!("non-printable character U+{:04X}", c as u32),
+                        self.reader.mark(),
+                    ));
                 }
                 value.push(c);
                 self.reader.bump();
@@ -41,7 +47,7 @@ impl Scanner<'_> {
             }
             self.fold_block_breaks(&mut value, min_indent, /*trim_leading*/ true);
         }
-        value
+        Ok(value)
     }
 
     /// Like [`Self::is_value_indicator`] but without the quoted-scalar rule,
@@ -238,6 +244,12 @@ impl Scanner<'_> {
                     self.fold_quoted_breaks(&mut value)?;
                 }
                 Some(c) => {
+                    if !is_nb_char(c) {
+                        return Err(scan_error(
+                            format!("non-printable character U+{:04X}", c as u32),
+                            self.reader.mark(),
+                        ));
+                    }
                     self.reader.bump();
                     value.push(c);
                 }
@@ -271,6 +283,12 @@ impl Scanner<'_> {
                     self.fold_quoted_breaks(&mut value)?;
                 }
                 Some(c) => {
+                    if !is_nb_json(c) {
+                        return Err(scan_error(
+                            format!("non-JSON character U+{:04X} in double-quoted scalar", c as u32),
+                            self.reader.mark(),
+                        ));
+                    }
                     self.reader.bump();
                     value.push(c);
                 }
@@ -348,9 +366,10 @@ impl Scanner<'_> {
         let mut code = 0u32;
         for _ in 0..width {
             let digit = match self.reader.bump() {
-                Some(c) => c
-                    .to_digit(16)
-                    .ok_or_else(|| scan_error(format!("invalid hex digit '{c}' in escape"), mark))?,
+                Some(c) if is_hex_digit(c) => c.to_digit(16).expect("hex digit"),
+                Some(c) => {
+                    return Err(scan_error(format!("invalid hex digit '{c}' in escape"), mark))
+                }
                 None => return Err(scan_error("unterminated hex escape".into(), mark)),
             };
             code = (code << 4) | digit;

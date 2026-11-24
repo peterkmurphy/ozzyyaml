@@ -154,9 +154,15 @@ impl<'a> Scanner<'a> {
                 self.simple_key_allowed = true;
             }
             _ => {
+                if crate::chars::is_reserved(c) {
+                    return Err(scan_error(
+                        "reserved indicators can't start a plain scalar".into(),
+                        mark,
+                    ));
+                }
                 self.save_possible_key(mark);
                 let start_line = mark.line;
-                let value = self.scan_plain();
+                let value = self.scan_plain()?;
                 self.push_scalar(value, ScalarStyle::Plain, mark);
                 // Multiline plain scalars allow a following simple key (libyaml).
                 self.simple_key_allowed =

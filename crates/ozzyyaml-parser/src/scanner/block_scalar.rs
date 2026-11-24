@@ -86,6 +86,12 @@ impl Scanner<'_> {
                 if c == '\n' {
                     break;
                 }
+                if !crate::chars::is_nb_char(c) {
+                    return Err(scan_error(
+                        format!("non-printable character U+{:04X}", c as u32),
+                        self.reader.mark(),
+                    ));
+                }
                 value.push(c);
                 self.reader.bump();
             }
