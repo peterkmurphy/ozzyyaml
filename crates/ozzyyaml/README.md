@@ -1,8 +1,9 @@
 # ozzyyaml
 
-Build YAML **1.2.2–oriented** documents into a shared [`Value`](https://docs.rs/ozzyyaml/latest/ozzyyaml/enum.Value.html)
-graph using the Core schema. The accepted language is still growing — see
-[conformance status](https://github.com/peterkmurphy/ozzyyaml/blob/main/docs/conformance.md).
+Build **YAML 1.2.2** documents into a shared [`Value`](https://docs.rs/ozzyyaml/latest/ozzyyaml/enum.Value.html)
+graph using the Core schema. See
+[conformance status](https://github.com/peterkmurphy/ozzyyaml/blob/main/docs/conformance.md)
+for suite coverage, Limits, and emit caveats.
 
 This is the compose layer of the
 [ozzyyaml](https://github.com/peterkmurphy/ozzyyaml) stack: it consumes events
@@ -46,7 +47,8 @@ assert_eq!(docs.len(), 2);
 ```
 
 Each loader has a `*_with_limits` twin when you need tighter caps than the
-defaults.
+defaults. Byte APIs (`from_slice` / `load_all_from_slice`) accept UTF-8 and
+BOM-marked UTF-16 / UTF-32; string APIs and emit stay UTF-8.
 
 ## Values, aliases, and cycles
 

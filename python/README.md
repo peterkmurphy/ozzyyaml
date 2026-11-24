@@ -1,9 +1,9 @@
 # ozzyyaml
 
-**YAML 1.2.2–oriented** for Python, backed by a from-scratch Rust
-implementation (language coverage still incomplete — see the repo
-[conformance notes](https://github.com/peterkmurphy/ozzyyaml/blob/main/docs/conformance.md)).
-Licensed under the BSD-3-Clause.
+**YAML 1.2.2** for Python, backed by a from-scratch Rust implementation.
+See the repo
+[conformance notes](https://github.com/peterkmurphy/ozzyyaml/blob/main/docs/conformance.md)
+for suite coverage and caveats. Licensed under the BSD-3-Clause.
 
 ozzyyaml exists because common stacks still struggle with parts of the 1.2.2
 spec. In particular, **libyaml** (and therefore **PyYAML**) rejects Unicode in

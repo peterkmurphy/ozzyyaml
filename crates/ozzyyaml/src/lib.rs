@@ -5,6 +5,7 @@
 //! using the Core schema.
 
 mod compose;
+mod encoding;
 mod error;
 mod limits;
 mod schema;

@@ -1,19 +1,32 @@
 # Conformance status
 
-ozzyyaml targets YAML 1.2.2 but is **not yet complete**.
+ozzyyaml implements **YAML 1.2.2** for parse, Core-schema compose, and data
+round-trip emit, with the caveats below.
 
-The event parser’s allowlist is growing as language gaps close (see
-`crates/ozzyyaml-parser/tests/suite_allowlist.txt`). Multi-line plain/quoted
-folding (§8.1.3), block scalars `|` / `>` (§8.1.4–§8.1.6), the full
-double-quoted escape set (§7.3.2), explicit keys (`?`), and `%YAML`/`%TAG`
-directive validation are implemented. Compose applies Core tags strictly
-(`!!int twelve` is an error). Compose and emit↔load round-trip cover a large
-share of the suite (acyclic documents). Remaining major gap: UTF-16/32 streams.
+## What is covered
 
-Track design:
+- Event parser language: multi-line plain/quoted folding (§8.1.3), block
+  scalars `|` / `>` (§8.1.4–§8.1.6), full double-quoted escapes (§7.3.2),
+  explicit keys (`?`), `%YAML` / `%TAG` directives, Unicode anchors
+- Core compose with **strict** known tags (`!!int twelve` is an error)
+- Emit → load data round-trip for acyclic documents in the
+  parser∩compose allowlist
+- Byte APIs (`from_slice` / `load_all_from_slice`): UTF-8, UTF-16LE/BE, and
+  UTF-32LE/BE via BOM (§5.2). String APIs and emit remain UTF-8
+- Default `Limits`: 256 MiB input, 10 000 nesting, 100 000 anchors (overridable)
+
+## Honest caveats
+
+- **yaml-test-suite events:** about **91%** of valid cases with `test.event`
+  (233 / 255) are allowlisted today. Remaining misses are mostly compact
+  empty-key / nested-flow edge cases, a few event-shape mismatches, and
+  tabs used as block-scalar indentation. See
+  `crates/ozzyyaml-parser/tests/suite_allowlist.txt`.
+- **Emit** does not preserve comments, tags as written, or source layout —
+  only `Value` data equality after dump→load.
+- **Core only:** `yes` / `no` stay strings; no YAML 1.1 merge keys.
+
+Design track:
 [superpowers/specs/2026-11-24-ozzyyaml-conformance-design.md](superpowers/specs/2026-11-24-ozzyyaml-conformance-design.md).  
-Implementation plan:
+Plan:
 [superpowers/plans/2026-11-24-ozzyyaml-conformance.md](superpowers/plans/2026-11-24-ozzyyaml-conformance.md).
-
-What *is* intentional and spec-aligned today: Unicode anchors, Core-schema
-`yes` / `no` as strings (not booleans), and no YAML 1.1 merge keys.

@@ -1,9 +1,9 @@
 # ozzyyaml-parser
 
-Turn YAML **1.2.2–oriented** text into a stream of parse events — the first
-stage of the [ozzyyaml](https://github.com/peterkmurphy/ozzyyaml) stack.
-Coverage is incomplete; see
-[conformance status](https://github.com/peterkmurphy/ozzyyaml/blob/main/docs/conformance.md).
+Turn **YAML 1.2.2** text into a stream of parse events — the first stage of
+the [ozzyyaml](https://github.com/peterkmurphy/ozzyyaml) stack. See
+[conformance status](https://github.com/peterkmurphy/ozzyyaml/blob/main/docs/conformance.md)
+for suite coverage and remaining edge cases.
 
 This crate does not build a document tree. It scans and parses, then hands you
 events you can feed into a composer (see the [`ozzyyaml`](https://crates.io/crates/ozzyyaml)

@@ -33,11 +33,17 @@ pub enum Error {
         /// Source position of the event that registered the anchor.
         mark: Mark,
     },
-    /// Input bytes were not valid UTF-8.
+    /// Input bytes were not valid UTF-8 (no other encoding BOM matched).
     #[error("invalid UTF-8 at byte {valid_up_to}")]
     InvalidUtf8 {
         /// Byte index of the first invalid sequence.
         valid_up_to: usize,
+    },
+    /// Input bytes used a detected encoding but could not be decoded.
+    #[error("invalid encoding: {message}")]
+    InvalidEncoding {
+        /// Human-readable explanation.
+        message: String,
     },
     /// `from_str` requires exactly one document.
     #[error("{message}")]

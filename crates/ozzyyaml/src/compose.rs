@@ -6,6 +6,7 @@ use std::rc::Rc;
 
 use ozzyyaml_parser::{Event, LimitKind, Mark, Parser, ScalarStyle};
 
+use crate::encoding::decode_yaml_bytes;
 use crate::error::{Error, Result};
 use crate::limits::Limits;
 use crate::schema::core::resolve_scalar;
@@ -44,35 +45,34 @@ pub fn load_all_with_limits(input: &str, limits: Limits) -> Result<Vec<Value>> {
     composer.compose_stream(&mut parser)
 }
 
-/// Parse a single YAML document from UTF-8 bytes into a [`Value`].
+/// Parse a single YAML document from encoded bytes into a [`Value`].
 ///
-/// Returns [`Error::InvalidUtf8`] when `input` is not valid UTF-8, and the same
-/// document-count errors as [`from_str`].
+/// Accepts UTF-8, UTF-16LE/BE, and UTF-32LE/BE with a leading BOM (§5.2).
+/// Without a BOM, `input` must be UTF-8. Emit remains UTF-8 only.
+///
+/// Returns [`Error::InvalidUtf8`] / [`Error::InvalidEncoding`] on decode
+/// failure, and the same document-count errors as [`from_str`].
 pub fn from_slice(input: &[u8]) -> Result<Value> {
     from_slice_with_limits(input, Limits::default())
 }
 
 /// [`from_slice`] with custom [`Limits`].
 pub fn from_slice_with_limits(input: &[u8], limits: Limits) -> Result<Value> {
-    let s = std::str::from_utf8(input).map_err(|e| Error::InvalidUtf8 {
-        valid_up_to: e.valid_up_to(),
-    })?;
-    from_str_with_limits(s, limits)
+    let s = decode_yaml_bytes(input)?;
+    from_str_with_limits(&s, limits)
 }
 
-/// Parse every document in a UTF-8 byte stream.
+/// Parse every document in an encoded byte stream.
 ///
-/// Returns [`Error::InvalidUtf8`] when `input` is not valid UTF-8.
+/// See [`from_slice`] for supported encodings.
 pub fn load_all_from_slice(input: &[u8]) -> Result<Vec<Value>> {
     load_all_from_slice_with_limits(input, Limits::default())
 }
 
 /// [`load_all_from_slice`] with custom [`Limits`].
 pub fn load_all_from_slice_with_limits(input: &[u8], limits: Limits) -> Result<Vec<Value>> {
-    let s = std::str::from_utf8(input).map_err(|e| Error::InvalidUtf8 {
-        valid_up_to: e.valid_up_to(),
-    })?;
-    load_all_with_limits(s, limits)
+    let s = decode_yaml_bytes(input)?;
+    load_all_with_limits(&s, limits)
 }
 
 struct Composer {
