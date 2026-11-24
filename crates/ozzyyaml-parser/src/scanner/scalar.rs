@@ -241,7 +241,7 @@ impl Scanner<'_> {
                     }
                 }
                 Some('\n') => {
-                    self.fold_quoted_breaks(&mut value)?;
+                    self.fold_quoted_breaks(&mut value, 0)?;
                 }
                 Some(c) => {
                     if !is_nb_char(c) {
@@ -260,6 +260,10 @@ impl Scanner<'_> {
     pub(super) fn scan_double_quoted(&mut self, start: Mark) -> Result<String> {
         self.reader.bump(); // opening quote
         let mut value = String::new();
+        // Length of `value` up to which trailing white space is content
+        // (produced by an escape or kept before an escaped break) and so
+        // must not be trimmed by a following line fold (§7.3.1 [111]).
+        let mut protected = 0usize;
         loop {
             match self.reader.peek() {
                 None => return Err(unterminated("double-quoted", start)),
@@ -271,16 +275,23 @@ impl Scanner<'_> {
                     self.reader.bump();
                     // Escaped line break: `\` + break discards the break (§6.6).
                     if self.reader.peek() == Some('\n') {
+                        // [112] s-double-escaped: `\` b-non-content l-empty*
+                        // s-flow-line-prefix; each empty line yields a `\n`.
                         self.reader.bump();
-                        while matches!(self.reader.peek(), Some(' ' | '\t')) {
+                        self.skip_inline_white();
+                        while self.reader.peek() == Some('\n') {
                             self.reader.bump();
+                            value.push('\n');
+                            self.skip_inline_white();
                         }
                     } else {
                         value.push(self.scan_escape()?);
                     }
+                    protected = value.len();
                 }
                 Some('\n') => {
-                    self.fold_quoted_breaks(&mut value)?;
+                    self.fold_quoted_breaks(&mut value, protected)?;
+                    protected = protected.min(value.len());
                 }
                 Some(c) => {
                     if !is_nb_json(c) {
@@ -296,16 +307,30 @@ impl Scanner<'_> {
         }
     }
 
-    /// Fold breaks inside a quoted scalar (§8.1.3 / quoted line folding).
-    fn fold_quoted_breaks(&mut self, value: &mut String) -> Result<()> {
+    fn skip_inline_white(&mut self) {
+        while matches!(self.reader.peek(), Some(' ' | '\t')) {
+            self.reader.bump();
+        }
+    }
+
+    /// Fold a line break inside a quoted scalar (§7.3.1 / [74] `s-flow-folded`).
+    ///
+    /// Trailing white space on the line being left is discarded (but never
+    /// below `protected`, which holds escape-produced content), the first
+    /// break is folded to a single space unless empty lines follow, in which
+    /// case each empty line yields `\n`; leading white space on the
+    /// continuation line is dropped.
+    fn fold_quoted_breaks(&mut self, value: &mut String, protected: usize) -> Result<()> {
         debug_assert_eq!(self.reader.peek(), Some('\n'));
         self.reader.bump();
 
+        while value.len() > protected && matches!(value.chars().last(), Some(' ' | '\t')) {
+            value.pop();
+        }
+
         let mut empty_lines = 0u32;
         loop {
-            while matches!(self.reader.peek(), Some(' ' | '\t')) {
-                self.reader.bump();
-            }
+            self.skip_inline_white();
             match self.reader.peek() {
                 Some('\n') => {
                     empty_lines += 1;
@@ -314,11 +339,6 @@ impl Scanner<'_> {
                 None => return Err(unterminated("quoted", self.reader.mark())),
                 Some(_) => {
                     if empty_lines > 0 {
-                        // Trailing spaces before a "real" line-break fold are
-                        // not kept (suite 6WPF: `foo \n\nbar` → `foo\nbar`).
-                        while matches!(value.chars().last(), Some(' ' | '\t')) {
-                            value.pop();
-                        }
                         for _ in 0..empty_lines {
                             value.push('\n');
                         }
