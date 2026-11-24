@@ -5,16 +5,17 @@ pub struct Limits {
     pub max_input_bytes: usize,
     /// Max collection / indent nesting depth.
     pub max_nesting_depth: usize,
-    /// Max distinct anchors registered (primary DoS brake; enforced in Milestone B compose, tracked for API stability here).
+    /// Max distinct anchors registered (primary DoS brake; enforced in compose,
+    /// tracked here for a shared API).
     pub max_anchors: usize,
 }
 
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_input_bytes: 16 * 1024 * 1024,
-            max_nesting_depth: 1_000,
-            max_anchors: 1_024,
+            max_input_bytes: 256 * 1024 * 1024,
+            max_nesting_depth: 10_000,
+            max_anchors: 100_000,
         }
     }
 }
@@ -43,13 +44,14 @@ impl Limits {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::reader::Reader;
 
     #[test]
-    fn default_limits_are_conservative() {
+    fn default_limits_are_raised() {
         let l = Limits::default();
-        assert!(l.max_anchors <= 10_000);
-        assert!(l.max_nesting_depth <= 1_000);
-        assert!(l.max_input_bytes <= 64 * 1024 * 1024);
+        assert_eq!(l.max_input_bytes, 256 * 1024 * 1024);
+        assert_eq!(l.max_nesting_depth, 10_000);
+        assert_eq!(l.max_anchors, 100_000);
     }
 
     #[test]
@@ -61,5 +63,19 @@ mod tests {
         assert_eq!(l.max_input_bytes, 2);
         assert_eq!(l.max_nesting_depth, 3);
         assert_eq!(l.max_anchors, 4);
+    }
+
+    #[test]
+    fn tiny_input_byte_limit_still_rejects() {
+        let limits = Limits::default().max_input_bytes(8);
+        let err = Reader::new("123456789", limits).unwrap_err();
+        assert!(matches!(
+            err,
+            crate::error::Error::LimitExceeded {
+                kind: crate::error::LimitKind::InputBytes,
+                limit: 8,
+                ..
+            }
+        ));
     }
 }
