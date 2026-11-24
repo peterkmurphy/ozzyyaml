@@ -12,13 +12,14 @@ ozzyyaml splits the work into clear stages:
 YAML text (UTF-8)
   → Reader        — bytes, line/column marks, size limit
   → Scanner       — tokens (scalars, anchors, collection markers, …)
-  → Parser        — YAML 1.2.2 events
+  → Parser        — YAML 1.2.2–oriented events (language subset; growing)
   → Composer      — Core-schema Value graph (shared with Rc)
   → Emitter       — YAML text again
 ```
 
-Each stage lives in a focused crate or module. Lower layers stay private where
-possible so the public API stays small.
+See [conformance.md](conformance.md) for what the parser does and does not
+accept yet. Each stage lives in a focused crate or module. Lower layers stay
+private where possible so the public API stays small.
 
 | Layer | Crate | Public highlights |
 | --- | --- | --- |

@@ -2,8 +2,9 @@
 
 [![ci](https://github.com/peterkmurphy/ozzyyaml/actions/workflows/ci.yml/badge.svg)](https://github.com/peterkmurphy/ozzyyaml/actions/workflows/ci.yml)
 
-ozzyyaml is a from-scratch **YAML 1.2.2** stack, written in Rust first, with
-Python bindings. It is licensed under the BSD-3-Clause.
+ozzyyaml is a from-scratch **YAML 1.2.2–oriented** stack, written in Rust
+first, with Python bindings. It is licensed under the BSD-3-Clause. Language
+coverage is still incomplete — see [docs/conformance.md](docs/conformance.md).
 
 The project exists because common YAML stacks still struggle with parts of the
 1.2.2 spec that matter in real documents. In particular, **libyaml** (and
@@ -37,7 +38,7 @@ The repository is a Cargo workspace with three main crates:
 | Crate | Role |
 | --- | --- |
 | `ozzyyaml-parser` | Turns YAML text into a stream of parse events |
-| `ozzyyaml` | Builds those events into a shared document graph (`Value`) using the YAML 1.2.2 Core schema |
+| `ozzyyaml` | Builds those events into a shared document graph (`Value`) using the YAML 1.2.2 Core schema (for the language subset we parse) |
 | `ozzyyaml-emit` | Writes a `Value` graph back out as YAML text |
 
 Compose supports shared aliases (including cycles) via `Rc` identity.
@@ -93,12 +94,14 @@ around aliases and cycles. CI builds and smoke-tests wheels for Linux, macOS
 4. Python package (Maturin wheels) — done
 5. Structured Python `Value` API — done
 6. crates.io + PyPI `0.1.0` — done
-7. Trusted publishing (OIDC) — in progress
-8. Optional later work: Serde, PyYAML-compat quirks
+7. Trusted publishing (OIDC) — done
+8. YAML 1.2.2 suite conformance — in progress ([status](docs/conformance.md))
+9. Optional later work: Serde, PyYAML-compat quirks
 
 ## Learn more
 
 - [Architecture overview](docs/architecture.md) — how the pipeline fits together
+- [Conformance status](docs/conformance.md) — suite coverage and gaps
 - [Python guide](docs/python.md) — install and API notes
 - [Releasing](docs/releasing.md) — tags, Trusted Publishing setup
 - Design notes live under `docs/superpowers/specs/` for contributors who want

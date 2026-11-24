@@ -1,7 +1,8 @@
 # ozzyyaml-emit
 
 Write [`ozzyyaml::Value`](https://docs.rs/ozzyyaml/latest/ozzyyaml/enum.Value.html)
-graphs back out as YAML **1.2.2** text.
+graphs back out as YAML **1.2.2–oriented** text (value dump, not full
+presentation fidelity).
 
 This is the emit side of the
 [ozzyyaml](https://github.com/peterkmurphy/ozzyyaml) stack. You compose (or

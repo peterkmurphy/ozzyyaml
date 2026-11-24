@@ -3,6 +3,8 @@
 ozzyyaml can be used from Python through a small Maturin / PyO3 package. The
 heavy lifting stays in Rust; Python can either receive ordinary native values
 or structured `Value` objects that preserve alias identity (including cycles).
+Language coverage matches the Rust crates — not yet full YAML 1.2.2; see
+[conformance.md](conformance.md).
 
 ## Install
 

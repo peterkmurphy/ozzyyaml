@@ -1,7 +1,8 @@
 # ozzyyaml
 
-Build YAML **1.2.2** documents into a shared [`Value`](https://docs.rs/ozzyyaml/latest/ozzyyaml/enum.Value.html)
-graph using the Core schema.
+Build YAML **1.2.2–oriented** documents into a shared [`Value`](https://docs.rs/ozzyyaml/latest/ozzyyaml/enum.Value.html)
+graph using the Core schema. The accepted language is still growing — see
+[conformance status](https://github.com/peterkmurphy/ozzyyaml/blob/main/docs/conformance.md).
 
 This is the compose layer of the
 [ozzyyaml](https://github.com/peterkmurphy/ozzyyaml) stack: it consumes events
