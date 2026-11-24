@@ -198,9 +198,9 @@ pub(crate) fn load_value(
     max_nesting_depth: Option<usize>,
     max_input_bytes: Option<usize>,
 ) -> PyResult<Py<YamlValue>> {
-    let text = crate::input_to_str(stream)?;
+    let input = crate::input_from_py(stream)?;
     let limits = crate::limits_from_kwargs(max_anchors, max_nesting_depth, max_input_bytes);
-    let value = ozzyyaml::from_str_with_limits(&text, limits).map_err(map_err)?;
+    let value = crate::load_one(input, limits)?;
     YamlValue::wrap_owned(py, value)
 }
 
@@ -213,9 +213,9 @@ pub(crate) fn load_all_value(
     max_nesting_depth: Option<usize>,
     max_input_bytes: Option<usize>,
 ) -> PyResult<PyObject> {
-    let text = crate::input_to_str(stream)?;
+    let input = crate::input_from_py(stream)?;
     let limits = crate::limits_from_kwargs(max_anchors, max_nesting_depth, max_input_bytes);
-    let docs = ozzyyaml::load_all_with_limits(&text, limits).map_err(map_err)?;
+    let docs = crate::load_docs(input, limits)?;
     let list = PyList::empty(py);
     for doc in docs {
         // Each document gets its own identity graph.

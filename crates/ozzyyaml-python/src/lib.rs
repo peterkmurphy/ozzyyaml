@@ -46,16 +46,44 @@ pub(crate) fn parse_style(style: &str) -> PyResult<EmitStyle> {
     }
 }
 
-pub(crate) fn input_to_str(stream: Bound<'_, PyAny>) -> PyResult<String> {
+/// Python `str` or `bytes` input for loaders.
+pub(crate) enum StreamInput {
+    /// Unicode text (UTF-8 string APIs).
+    Text(String),
+    /// Encoded bytes (BOM UTF-8 / UTF-16 / UTF-32 via `from_slice*`).
+    Bytes(Vec<u8>),
+}
+
+pub(crate) fn input_from_py(stream: Bound<'_, PyAny>) -> PyResult<StreamInput> {
     if let Ok(s) = stream.extract::<String>() {
-        return Ok(s);
+        return Ok(StreamInput::Text(s));
     }
     if let Ok(bytes) = stream.extract::<Vec<u8>>() {
-        return std::str::from_utf8(&bytes)
-            .map(str::to_owned)
-            .map_err(|e| map_err(format!("invalid UTF-8 at byte {}", e.valid_up_to())));
+        return Ok(StreamInput::Bytes(bytes));
     }
     Err(PyTypeError::new_err("stream must be str or bytes"))
+}
+
+pub(crate) fn load_one(
+    input: StreamInput,
+    limits: ozzyyaml::Limits,
+) -> Result<ozzyyaml::Value, PyErr> {
+    match input {
+        StreamInput::Text(s) => ozzyyaml::from_str_with_limits(&s, limits).map_err(map_err),
+        StreamInput::Bytes(b) => ozzyyaml::from_slice_with_limits(&b, limits).map_err(map_err),
+    }
+}
+
+pub(crate) fn load_docs(
+    input: StreamInput,
+    limits: ozzyyaml::Limits,
+) -> Result<Vec<ozzyyaml::Value>, PyErr> {
+    match input {
+        StreamInput::Text(s) => ozzyyaml::load_all_with_limits(&s, limits).map_err(map_err),
+        StreamInput::Bytes(b) => {
+            ozzyyaml::load_all_from_slice_with_limits(&b, limits).map_err(map_err)
+        }
+    }
 }
 
 fn value_to_py(
@@ -154,9 +182,9 @@ fn load(
     max_nesting_depth: Option<usize>,
     max_input_bytes: Option<usize>,
 ) -> PyResult<PyObject> {
-    let text = input_to_str(stream)?;
+    let input = input_from_py(stream)?;
     let limits = limits_from_kwargs(max_anchors, max_nesting_depth, max_input_bytes);
-    let value = ozzyyaml::from_str_with_limits(&text, limits).map_err(map_err)?;
+    let value = load_one(input, limits)?;
     let mut cache = HashMap::new();
     let mut stack = HashSet::new();
     value_to_py(py, &value, &mut cache, &mut stack)
@@ -171,9 +199,9 @@ fn load_all(
     max_nesting_depth: Option<usize>,
     max_input_bytes: Option<usize>,
 ) -> PyResult<PyObject> {
-    let text = input_to_str(stream)?;
+    let input = input_from_py(stream)?;
     let limits = limits_from_kwargs(max_anchors, max_nesting_depth, max_input_bytes);
-    let docs = ozzyyaml::load_all_with_limits(&text, limits).map_err(map_err)?;
+    let docs = load_docs(input, limits)?;
     let list = PyList::empty(py);
     for doc in &docs {
         let mut cache = HashMap::new();

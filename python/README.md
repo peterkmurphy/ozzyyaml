@@ -1,9 +1,11 @@
 # ozzyyaml
 
-**YAML 1.2.2** for Python, backed by a from-scratch Rust implementation.
+**YAML 1.2.2** for Python, backed by a from-scratch Rust implementation
+(parse, Core compose, data round-trip emit; `bytes` accept UTF-16/32 BOM).
 See the repo
 [conformance notes](https://github.com/peterkmurphy/ozzyyaml/blob/main/docs/conformance.md)
-for suite coverage and caveats. Licensed under the BSD-3-Clause.
+for suite coverage (~91% of valid event cases) and caveats. Licensed under
+the BSD-3-Clause.
 
 ozzyyaml exists because common stacks still struggle with parts of the 1.2.2
 spec. In particular, **libyaml** (and therefore **PyYAML**) rejects Unicode in
@@ -61,7 +63,8 @@ Failures from the Rust stack raise `ozzyyaml.OzzyYamlError`.
 | Resource caps | `max_anchors`, `max_nesting_depth`, `max_input_bytes` keyword args |
 
 The loader follows the YAML **1.2.2 Core** schema, so plain `yes` / `no` stay
-strings rather than becoming booleans.
+strings rather than becoming booleans. Known tags are strict (`!!int twelve`
+errors). `load` accepts `str` or BOM-marked UTF-8 / UTF-16 / UTF-32 `bytes`.
 
 ## Develop from a checkout
 
