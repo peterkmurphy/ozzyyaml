@@ -143,8 +143,7 @@ impl Scanner<'_> {
             rest = &rest[i..];
             if rest.starts_with("---") || rest.starts_with("...") {
                 let after = rest.get(3..).unwrap_or("");
-                return after.is_empty()
-                    || after.starts_with([' ', '\t', '\n', '\r']);
+                return after.is_empty() || after.starts_with([' ', '\t', '\n', '\r']);
             }
             if !rest.is_empty() && !rest.starts_with('\n') && !rest.starts_with('\r') {
                 return false;
@@ -320,8 +319,7 @@ impl Scanner<'_> {
                 let rest = self.reader.rest();
                 if rest.starts_with("---") || rest.starts_with("...") {
                     let after = rest.get(3..).unwrap_or("");
-                    let marker_ok = after.is_empty()
-                        || after.starts_with([' ', '\t', '\n', '\r']);
+                    let marker_ok = after.is_empty() || after.starts_with([' ', '\t', '\n', '\r']);
                     if marker_ok {
                         return Err(scan_error(
                             "document marker while scanning a quoted scalar".into(),

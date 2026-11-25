@@ -71,7 +71,10 @@ fn utf8_bom_loads() {
 
 #[test]
 fn utf8_without_bom_still_works() {
-    assert_eq!(from_slice(b"hello\n").unwrap(), Value::String("hello".into()));
+    assert_eq!(
+        from_slice(b"hello\n").unwrap(),
+        Value::String("hello".into())
+    );
 }
 
 #[test]
