@@ -1,0 +1,33 @@
+# Longer scheduled fuzz runs. Failures upload artifacts for triage.
+name: fuzz-nightly
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [fuzz_parse_str, fuzz_roundtrip]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Run ${{ matrix.target }} (~15 min)
+        run: cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=900
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: |
+            fuzz/artifacts
+            fuzz/corpus/${{ matrix.target }}
+          if-no-files-found: ignore

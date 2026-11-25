@@ -41,6 +41,9 @@ round-trip emit, with the caveats below.
 - **Emit** does not preserve comments, tags as written, or source layout —
   only `Value` data equality after dump→load.
 - **Core only:** `yes` / `no` stay strings; no YAML 1.1 merge keys.
+- **Fuzzing:** `cargo-fuzz` targets for `parse_str` and compose/emit
+  round-trip run bounded in CI and longer on a nightly schedule. See
+  [fuzz-findings.md](superpowers/fuzz-findings.md).
 
 Design tracks:
 [0.2.0 pre-release](superpowers/specs/2026-11-26-ozzyyaml-0.2.0-prerelease-design.md),
