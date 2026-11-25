@@ -241,6 +241,15 @@ XV9V
 XW4D
 Y2GN
 # yaml-test-suite case IDs that must pass (vendor/yaml-test-suite, `data` branch layout).
+# Task 5: compact / same-indent block collections (§8.2).
+AZ63
+RLU9
+S9E8
+57H4
+S3PD
+SKE5
+6PBE
+AB8U
 YD5X
 Z67P
 Z9M4

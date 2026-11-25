@@ -79,10 +79,10 @@ impl Scanner<'_> {
                 if first == '#' {
                     return false;
                 }
-                // A new block sequence entry at this indent ends the scalar.
-                if self.flow_level == 0 && first == '-' && self.peek_indicator_blank_at(col) {
-                    return false;
-                }
+                // A more-indented `- ` (col > min_indent) is plain-scalar content,
+                // not a new entry; a sibling `- ` at min_indent is already stopped
+                // by the `col <= min_indent` check above (libyaml folds purely on
+                // indentation — [126] ns-plain-first / §8.1.3).
                 // Document markers at column 1 end the scalar.
                 if col == 1 && self.peek_document_marker_ahead() {
                     return false;
@@ -147,27 +147,6 @@ impl Scanner<'_> {
                     || after.starts_with(|c: char| matches!(c, ' ' | '\t' | '\n' | '\r'));
             }
             if !rest.is_empty() && !rest.starts_with('\n') && !rest.starts_with('\r') {
-                return false;
-            }
-        }
-        false
-    }
-
-    fn peek_indicator_blank_at(&self, _col: u32) -> bool {
-        // Used when first char is '-'; check if followed by blank (block entry).
-        let mut rest = self.reader.rest();
-        while let Some(br) = line_break_len(rest) {
-            rest = &rest[br..];
-            let mut i = 0;
-            while i < rest.len() && matches!(rest[i..].chars().next(), Some(' ' | '\t')) {
-                i += rest[i..].chars().next().unwrap().len_utf8();
-            }
-            rest = &rest[i..];
-            if rest.starts_with('-') {
-                let next = rest[1..].chars().next();
-                return next.is_none() || matches!(next, Some(' ' | '\t' | '\n' | '\r'));
-            }
-            if !rest.is_empty() {
                 return false;
             }
         }

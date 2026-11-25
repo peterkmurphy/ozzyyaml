@@ -156,7 +156,9 @@ impl<'a> Parser<'a> {
                 Some(Token::Key { .. }) => {
                     self.bump();
                     self.state = State::BlockMappingValue;
-                    self.parse_node(true).map(Some)
+                    // Explicit `?` keys may contain a zero-indent sequence at the
+                    // mapping's own indent (libyaml `parse_node(block=1, indentless=1)`).
+                    self.parse_node_in(true, true).map(Some)
                 }
                 Some(Token::Value { .. }) => {
                     // Empty key: `: value` or lone `:` after a prior entry.
