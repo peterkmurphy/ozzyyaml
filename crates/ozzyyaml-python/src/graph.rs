@@ -99,7 +99,7 @@ impl YamlValue {
         }
     }
 
-    fn __getitem__(&self, py: Python<'_>, key: Bound<'_, PyAny>) -> PyResult<PyObject> {
+    fn __getitem__(&self, py: Python<'_>, key: Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
         match &*self.inner {
             Value::Sequence(items) => {
                 let idx: isize = key.extract()?;
@@ -212,7 +212,7 @@ pub(crate) fn load_all_value(
     max_anchors: Option<usize>,
     max_nesting_depth: Option<usize>,
     max_input_bytes: Option<usize>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let input = crate::input_from_py(stream)?;
     let limits = crate::limits_from_kwargs(max_anchors, max_nesting_depth, max_input_bytes);
     let docs = crate::load_docs(input, limits)?;

@@ -89,8 +89,8 @@ pub(crate) fn load_docs(
 fn value_to_py(
     py: Python<'_>,
     value: &Value,
-    cache: &mut HashMap<*const Value, PyObject>,
-) -> PyResult<PyObject> {
+    cache: &mut HashMap<*const Value, Py<PyAny>>,
+) -> PyResult<Py<PyAny>> {
     let ptr = value as *const Value;
     if let Some(existing) = cache.get(&ptr) {
         return Ok(existing.clone_ref(py));
@@ -149,22 +149,19 @@ fn value_to_py(
     }
 }
 
-fn mapping_key_to_hashable(py: Python<'_>, key: PyObject) -> PyResult<PyObject> {
+fn mapping_key_to_hashable(py: Python<'_>, key: Py<PyAny>) -> PyResult<Py<PyAny>> {
     Ok(hashable_key_item(py, key.bind(py))?.unbind())
 }
 
-fn hashable_key_item<'py>(
-    py: Python<'py>,
-    obj: &Bound<'py, PyAny>,
-) -> PyResult<Bound<'py, PyAny>> {
-    if let Ok(list) = obj.downcast::<PyList>() {
+fn hashable_key_item<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    if let Ok(list) = obj.cast::<PyList>() {
         let mut items = Vec::with_capacity(list.len());
         for item in list.iter() {
             items.push(hashable_key_item(py, &item)?);
         }
         return Ok(PyTuple::new(py, items)?.into_any());
     }
-    if let Ok(dict) = obj.downcast::<PyDict>() {
+    if let Ok(dict) = obj.cast::<PyDict>() {
         let mut pairs = Vec::with_capacity(dict.len());
         for (k, v) in dict.iter() {
             let tk = hashable_key_item(py, &k)?;
@@ -192,21 +189,21 @@ fn py_to_value(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
     if let Ok(s) = obj.extract::<String>() {
         return Ok(Value::String(s));
     }
-    if let Ok(list) = obj.downcast::<PyList>() {
+    if let Ok(list) = obj.cast::<PyList>() {
         let mut items = Vec::with_capacity(list.len());
         for item in list.iter() {
             items.push(Rc::new(py_to_value(&item)?));
         }
         return Ok(Value::Sequence(std::cell::RefCell::new(items)));
     }
-    if let Ok(tup) = obj.downcast::<PyTuple>() {
+    if let Ok(tup) = obj.cast::<PyTuple>() {
         let mut items = Vec::with_capacity(tup.len());
         for item in tup.iter() {
             items.push(Rc::new(py_to_value(&item)?));
         }
         return Ok(Value::Sequence(std::cell::RefCell::new(items)));
     }
-    if let Ok(dict) = obj.downcast::<PyDict>() {
+    if let Ok(dict) = obj.cast::<PyDict>() {
         let mut entries = Vec::with_capacity(dict.len());
         for (k, v) in dict.iter() {
             entries.push((Rc::new(py_to_value(&k)?), Rc::new(py_to_value(&v)?)));
@@ -227,7 +224,7 @@ fn load(
     max_anchors: Option<usize>,
     max_nesting_depth: Option<usize>,
     max_input_bytes: Option<usize>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let input = input_from_py(stream)?;
     let limits = limits_from_kwargs(max_anchors, max_nesting_depth, max_input_bytes);
     let value = load_one(input, limits)?;
@@ -243,7 +240,7 @@ fn load_all(
     max_anchors: Option<usize>,
     max_nesting_depth: Option<usize>,
     max_input_bytes: Option<usize>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let input = input_from_py(stream)?;
     let limits = limits_from_kwargs(max_anchors, max_nesting_depth, max_input_bytes);
     let docs = load_docs(input, limits)?;
@@ -268,7 +265,7 @@ fn dump(data: Bound<'_, PyAny>, style: &str) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (docs, *, style="flow"))]
 fn dump_all(docs: Bound<'_, PyAny>, style: &str) -> PyResult<String> {
-    let list = docs.downcast::<PyList>()?;
+    let list = docs.cast::<PyList>()?;
     let mut values = Vec::with_capacity(list.len());
     for item in list.iter() {
         values.push(py_to_value(&item)?);
