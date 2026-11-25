@@ -8,13 +8,12 @@ use crate::token::Token;
 
 impl Scanner<'_> {
     /// True if the `:` at the reader position is a value indicator.
-    pub(super) fn is_value_indicator(&self, mark: Mark) -> bool {
+    pub(super) fn is_value_indicator(&self, _mark: Mark) -> bool {
         if self.indicator_followed_by_blank() {
             return true;
         }
         self.flow_level > 0
             && (self.after_json_node
-                || self.json_node_end == Some(mark.index)
                 || self
                     .reader
                     .peek2()
@@ -24,7 +23,6 @@ impl Scanner<'_> {
     /// Records that a quoted scalar or flow collection just ended, so a
     /// following `:` is a value indicator without needing a blank after it.
     pub(super) fn mark_json_node_end(&mut self) {
-        self.json_node_end = Some(self.reader.mark().index);
         self.json_node_pending = true;
     }
 

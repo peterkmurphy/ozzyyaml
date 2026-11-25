@@ -119,7 +119,7 @@ fn suite_allowlist_roundtrip_acyclic() {
     ids.sort();
     assert!(
         ids.len() >= 100,
-        "expected a large parser∩compose set, got {}",
+        "expected a large compose allowlist for round-trip, got {}",
         ids.len()
     );
 

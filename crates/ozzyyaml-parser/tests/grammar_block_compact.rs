@@ -148,3 +148,18 @@ fn suite_6pbe() {
 fn suite_ab8u() {
     assert_suite_events("AB8U");
 }
+
+/// Sibling `-` at the collection indent after a plain scalar starts a new entry
+/// (must not fold into the previous scalar — complement of AB8U).
+#[test]
+fn sibling_block_entry_after_plain_is_new_entry() {
+    let events = parse_str("- hello\n- world\n").unwrap();
+    let scalars: Vec<_> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Scalar { value, .. } => Some(value.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(scalars, ["hello", "world"]);
+}

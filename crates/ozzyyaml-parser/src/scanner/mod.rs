@@ -44,10 +44,6 @@ pub(crate) struct Scanner<'a> {
     possible_key_stack: Vec<Option<PossibleKey>>,
     /// Number of currently open flow collections (`[` / `{`).
     flow_level: usize,
-    /// Reader index just past the most recent JSON-like node (quoted scalar or
-    /// flow collection); a `:` directly there is a value indicator inside flow
-    /// collections (`{"a":1}`, `[{a: b}:c]`).
-    json_node_end: Option<usize>,
     /// The previous token was a JSON-like node, so a `:` at the start of the
     /// next token (even after whitespace, a comment or a line break) is an
     /// adjacent value indicator inside flow collections (`{ "a"\n :b }`).
@@ -69,7 +65,6 @@ impl<'a> Scanner<'a> {
             possible_key: None,
             possible_key_stack: Vec::new(),
             flow_level: 0,
-            json_node_end: None,
             after_json_node: false,
             simple_key_allowed: true,
             json_node_pending: false,
