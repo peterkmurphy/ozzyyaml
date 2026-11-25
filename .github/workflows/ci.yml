@@ -4,13 +4,13 @@ jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: cargo fmt --all -- --check
@@ -28,11 +28,11 @@ jobs:
       run:
         working-directory: python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install Maturin and pytest
@@ -53,11 +53,11 @@ jobs:
       run:
         working-directory: python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14t"
       - name: Confirm free-threaded interpreter
@@ -66,18 +66,21 @@ jobs:
           python -c "import sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1"
       - name: Install Maturin
         run: pip install maturin
-      - name: Build, install, smoke import
+      - name: Build wheel, install into venv, smoke import
+        # Prefer build+venv over `maturin develop`: runner Pythons are often
+        # PEP 668-managed, and develop installs into the active env.
         run: |
-          maturin develop --release
-          # Only the smoke import forces the GIL off — maturin itself probes
-          # the interpreter and fails if PYTHON_GIL=0 is set for the whole job.
-          PYTHON_GIL=0 python -c "import ozzyyaml; print(ozzyyaml.load('1\n'))"
+          maturin build --release --out dist
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install dist/*.whl
+          PYTHON_GIL=0 python -c "import sys; assert not sys._is_gil_enabled(); import ozzyyaml; print(ozzyyaml.load('1\n'))"
 
   fuzz:
     name: fuzz (bounded)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: recursive
       - uses: dtolnay/rust-toolchain@nightly
