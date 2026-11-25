@@ -120,8 +120,24 @@ impl<'a> Scanner<'a> {
             self.done = true;
             return Ok(());
         };
+        // Document markers at column 1 are illegal inside flow collections.
+        if mark.column == 1 && self.flow_level > 0 {
+            let rest = self.reader.rest();
+            if let Some(marker) = ["---", "..."].into_iter().find(|m| rest.starts_with(m)) {
+                let after_ok = match rest[3..].chars().next() {
+                    None | Some(' ' | '\t' | '\n' | '\r') => true,
+                    Some(_) => false,
+                };
+                if after_ok {
+                    return Err(scan_error(
+                        format!("document marker `{marker}` inside flow collection"),
+                        mark,
+                    ));
+                }
+            }
+        }
         if let Some(marker) = self.document_marker(mark) {
-            self.fetch_document_marker(marker, mark);
+            self.fetch_document_marker(marker, mark)?;
             return Ok(());
         }
         if self.flow_level == 0 {
@@ -163,6 +179,12 @@ impl<'a> Scanner<'a> {
                 let (value, style) = self.scan_block_scalar(mark)?;
                 self.push_scalar(value, style, mark);
                 self.simple_key_allowed = true;
+            }
+            '#' if self.after_json_node => {
+                return Err(scan_error(
+                    "comment must be separated from previous token by whitespace".into(),
+                    mark,
+                ));
             }
             _ => {
                 if crate::chars::is_reserved(c) {
@@ -233,11 +255,21 @@ impl<'a> Scanner<'a> {
 
     fn skip_whitespace_and_comments(&mut self) {
         loop {
+            let mut skipped_ws = false;
             while matches!(self.reader.peek(), Some(' ' | '\t')) {
+                skipped_ws = true;
                 self.reader.bump();
             }
             if self.reader.peek() == Some('#') {
-                self.skip_to_end_of_line();
+                // After a quoted/flow ("JSON") node, `#` must be separated by
+                // whitespace (suite SU5Z). Elsewhere a `#` still starts a
+                // comment even if a prior scan already consumed indentation.
+                let col = self.reader.mark().column;
+                if skipped_ws || col == 1 || !self.json_node_pending {
+                    self.skip_to_end_of_line();
+                } else {
+                    break;
+                }
             }
             if self.reader.peek() == Some('\n') {
                 self.reader.bump();

@@ -16,13 +16,15 @@ impl Parser<'_> {
     }
 
     /// Parses an optional anchor and tag, in either order.
-    fn parse_properties(&mut self) -> Result<(Option<String>, Option<String>)> {
-        let (mut anchor, mut tag) = (None, None);
+    /// Returns the line of the last property token (for same-line checks).
+    fn parse_properties(&mut self) -> Result<(Option<String>, Option<String>, Option<u32>)> {
+        let (mut anchor, mut tag, mut prop_line) = (None, None, None);
         loop {
             match self.peek()? {
                 Some(Token::Anchor { .. }) if anchor.is_none() => {
-                    if let Some(Token::Anchor { name, .. }) = self.bump() {
+                    if let Some(Token::Anchor { name, mark, .. }) = self.bump() {
                         anchor = Some(name);
+                        prop_line = Some(mark.line);
                     }
                 }
                 Some(Token::Tag { .. }) if tag.is_none() => {
@@ -33,9 +35,10 @@ impl Parser<'_> {
                     }) = self.bump()
                     {
                         tag = Some(self.resolve_tag(&handle, &suffix, mark)?);
+                        prop_line = Some(mark.line);
                     }
                 }
-                _ => return Ok((anchor, tag)),
+                _ => return Ok((anchor, tag, prop_line)),
             }
         }
     }
@@ -50,7 +53,7 @@ impl Parser<'_> {
     /// sequence whose `-` entries sit at the parent mapping's indent
     /// (`key:\n- a`), which only a block mapping value may contain.
     pub(super) fn parse_node_in(&mut self, allow_empty: bool, indentless: bool) -> Result<Event> {
-        let (anchor, tag) = self.parse_properties()?;
+        let (anchor, tag, prop_line) = self.parse_properties()?;
         let has_props = anchor.is_some() || tag.is_some();
         match self.peek()? {
             Some(Token::Alias { .. }) if has_props => Err(unexpected_or_eof(self.peeked.as_ref())),
@@ -67,6 +70,15 @@ impl Parser<'_> {
                 }),
                 other => Err(unexpected_or_eof(other.as_ref())),
             },
+            Some(Token::BlockSequenceStart { mark })
+                if prop_line.is_some_and(|l| l == mark.line) =>
+            {
+                Err(Error::Parse {
+                    message: "properties cannot precede a block sequence entry on the same line"
+                        .into(),
+                    mark: *mark,
+                })
+            }
             Some(Token::BlockSequenceStart { .. }) => {
                 let mark = self.bump_mark()?;
                 self.start_collection(State::BlockSequenceEntry, mark)?;

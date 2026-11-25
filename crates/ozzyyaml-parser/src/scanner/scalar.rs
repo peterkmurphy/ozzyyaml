@@ -310,6 +310,22 @@ impl Scanner<'_> {
         let mut empty_lines = 0u32;
         loop {
             self.skip_inline_white();
+            let col = self.reader.mark().column;
+            // A document marker at column 1 cannot appear inside an open quoted scalar.
+            if col == 1 {
+                let rest = self.reader.rest();
+                if rest.starts_with("---") || rest.starts_with("...") {
+                    let after = rest.get(3..).unwrap_or("");
+                    let marker_ok = after.is_empty()
+                        || after.starts_with(|c: char| matches!(c, ' ' | '\t' | '\n' | '\r'));
+                    if marker_ok {
+                        return Err(scan_error(
+                            "document marker while scanning a quoted scalar".into(),
+                            self.reader.mark(),
+                        ));
+                    }
+                }
+            }
             match self.reader.peek() {
                 Some('\n') => {
                     empty_lines += 1;

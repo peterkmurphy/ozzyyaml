@@ -22,17 +22,39 @@ impl Scanner<'_> {
         }
     }
 
-    pub(super) fn fetch_document_marker(&mut self, marker: &str, mark: Mark) {
+    pub(super) fn fetch_document_marker(&mut self, marker: &str, mark: Mark) -> Result<()> {
         self.unroll_indent(0, mark);
         self.possible_key = None;
         for _ in 0..3 {
             self.reader.bump();
+        }
+        // `---` may be followed by content on the same line. `...` may only be
+        // followed by whitespace and an optional `#` comment until EOL.
+        if marker == "..." {
+            while matches!(self.reader.peek(), Some(' ' | '\t')) {
+                self.reader.bump();
+            }
+            match self.reader.peek() {
+                None | Some('\n' | '\r') => {}
+                Some('#') => {
+                    while self.reader.peek().is_some_and(|c| c != '\n') {
+                        self.reader.bump();
+                    }
+                }
+                Some(_) => {
+                    return Err(scan_error(
+                        "unexpected content after document end marker".into(),
+                        self.reader.mark(),
+                    ));
+                }
+            }
         }
         self.queue.push_back(if marker == "---" {
             Token::DocumentStart { mark }
         } else {
             Token::DocumentEnd { mark }
         });
+        Ok(())
     }
 
     /// Scans a `%NAME arg…` directive line.
@@ -100,7 +122,14 @@ impl Scanner<'_> {
                 let Some(len) = tag_char_len_at(rest) else {
                     // Flow indicators / `:` end the tag (e.g. `!!str,` in a flow map).
                     // Other `ns-char` values are illegal inside a tag (e.g. raw non-ASCII).
+                    // In block context a comma after a tag is invalid (suite U99R).
                     if let Some(c) = self.reader.peek() {
+                        if c == ',' && self.flow_level == 0 {
+                            return Err(scan_error(
+                                "invalid comma in or after tag".into(),
+                                self.reader.mark(),
+                            ));
+                        }
                         if crate::chars::is_flow_indicator(c) || c == ':' {
                             break;
                         }
