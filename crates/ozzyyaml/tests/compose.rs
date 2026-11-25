@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use ozzyyaml::{
@@ -98,9 +99,39 @@ fn from_slice_parses_utf8() {
 }
 
 #[test]
-fn duplicate_anchor() {
-    let err = from_str("[&a 1, &a 2]\n").unwrap_err();
-    assert!(matches!(err, Error::DuplicateAnchor { name, .. } if name == "a"));
+fn redefined_anchor_later_alias_sees_new_value() {
+    // 3GZX-shaped: first alias sees Foo; after redefine, alias sees Bar.
+    let v = from_str(
+        "First occurrence: &anchor Foo\n\
+         Second occurrence: *anchor\n\
+         Override anchor: &anchor Bar\n\
+         Reuse anchor: *anchor\n",
+    )
+    .unwrap();
+    let Value::Mapping(entries) = v else {
+        panic!("expected mapping");
+    };
+    let entries = entries.borrow();
+    let get = |key: &str| -> Value {
+        entries
+            .iter()
+            .find(|(k, _)| matches!(k.as_ref(), Value::String(s) if s == key))
+            .map(|(_, val)| val.as_ref().clone())
+            .unwrap_or_else(|| panic!("missing {key}"))
+    };
+    assert_eq!(get("First occurrence"), Value::String("Foo".into()));
+    assert_eq!(get("Second occurrence"), Value::String("Foo".into()));
+    assert_eq!(get("Override anchor"), Value::String("Bar".into()));
+    assert_eq!(get("Reuse anchor"), Value::String("Bar".into()));
+}
+
+#[test]
+fn suite_3gzx_and_pw8x_compose_ok() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../vendor/yaml-test-suite");
+    for id in ["3GZX", "PW8X"] {
+        let yaml = std::fs::read_to_string(root.join(id).join("in.yaml")).unwrap();
+        load_all(&yaml).unwrap_or_else(|e| panic!("{id}: {e}"));
+    }
 }
 
 #[test]
@@ -178,21 +209,6 @@ fn load_all_from_slice_with_limits_rejects_invalid_utf8() {
     match err {
         Error::InvalidUtf8 { valid_up_to: 0 } => {}
         other => panic!("expected InvalidUtf8, got {other:?}"),
-    }
-}
-
-#[test]
-fn duplicate_anchor_has_mark() {
-    let err = from_str("[&a 1, &a 2]\n").unwrap_err();
-    match err {
-        Error::DuplicateAnchor { name, mark } => {
-            assert_eq!(name, "a");
-            assert!(mark.line >= 1);
-            assert!(mark.column >= 1);
-            // Second `&a` is not at stream start.
-            assert!(mark.index > 0 || mark.column > 1);
-        }
-        other => panic!("expected DuplicateAnchor, got {other:?}"),
     }
 }
 

@@ -1,34 +1,40 @@
-//! Allowlisted compose success against yaml-test-suite `in.yaml`.
-//! Only IDs listed in `suite_allowlist.txt`. Never allowlist a failing case.
-//!
-//! Criterion: `load_all(in.yaml)` returns `Ok(_)`. Value trees are not compared.
+//! Every valid yaml-test-suite case (in.yaml + test.event, no error marker)
+//! must compose via `load_all`. Value trees are not compared.
 
 use ozzyyaml::load_all;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn suite_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../vendor/yaml-test-suite")
 }
 
-fn allowlist() -> Vec<String> {
-    include_str!("suite_allowlist.txt")
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .map(String::from)
-        .collect()
+fn valid_compose_suite_ids(root: &Path) -> Vec<String> {
+    let mut ids: Vec<_> = std::fs::read_dir(root)
+        .expect("suite root")
+        .filter_map(Result::ok)
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|id| {
+            let d = root.join(id);
+            d.join("in.yaml").is_file()
+                && d.join("test.event").is_file()
+                && !d.join("error").exists()
+        })
+        .collect();
+    ids.sort();
+    ids
 }
 
 #[test]
-fn allowlisted_cases_compose_ok() {
+fn all_valid_cases_compose_ok() {
     let root = suite_root();
     assert!(
         root.join("229Q").is_dir(),
         "yaml-test-suite submodule missing; run `git submodule update --init`"
     );
 
-    let ids = allowlist();
-    assert!(!ids.is_empty(), "allowlist must not be empty");
+    let ids = valid_compose_suite_ids(&root);
+    assert!(!ids.is_empty(), "no valid suite cases found");
 
     let mut failures = Vec::new();
     for id in &ids {
@@ -41,41 +47,8 @@ fn allowlisted_cases_compose_ok() {
 
     assert!(
         failures.is_empty(),
-        "compose failures:\n{}",
+        "compose failures ({}):\n{}",
+        failures.len(),
         failures.join("\n")
     );
-}
-
-/// Prints IDs of top-level suite cases (valid cases only: no `error` marker) whose
-/// `in.yaml` composes successfully. Use to find candidates for `suite_allowlist.txt`.
-#[test]
-#[ignore = "manual discovery"]
-fn discover_compose_passing_cases() {
-    let root = suite_root();
-    let mut ids: Vec<String> = std::fs::read_dir(&root)
-        .expect("suite root")
-        .filter_map(Result::ok)
-        .filter(|e| e.path().is_dir())
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .collect();
-    ids.sort();
-
-    let mut passing = Vec::new();
-    for id in ids {
-        let dir = root.join(&id);
-        if dir.join("error").exists() {
-            continue;
-        }
-        let Ok(input) = std::fs::read_to_string(dir.join("in.yaml")) else {
-            continue;
-        };
-        let result = std::panic::catch_unwind(|| load_all(&input).is_ok());
-        if matches!(result, Ok(true)) {
-            passing.push(id);
-        }
-    }
-    println!("PASSING_COUNT={}", passing.len());
-    for id in &passing {
-        println!("PASS {id}");
-    }
 }

@@ -115,7 +115,9 @@ fn suite_allowlist_roundtrip_acyclic() {
 
     // The parser now passes every valid `test.event` case, so the compose
     // allowlist alone selects the round-trip set.
-    let mut ids: Vec<_> = read_id_list("tests/suite_allowlist.txt").into_iter().collect();
+    let mut ids: Vec<_> = read_id_list("tests/suite_roundtrip_allowlist.txt")
+        .into_iter()
+        .collect();
     ids.sort();
     assert!(
         ids.len() >= 100,

@@ -15,14 +15,6 @@ pub enum Error {
         /// Source position of the alias event.
         mark: Mark,
     },
-    /// Anchor name was registered more than once in the same document.
-    #[error("duplicate anchor `{name}` at {mark}")]
-    DuplicateAnchor {
-        /// Duplicate anchor name.
-        name: String,
-        /// Source position of the event that repeated the anchor.
-        mark: Mark,
-    },
     /// A configured resource limit was exceeded.
     #[error("limit exceeded: {kind:?} (limit {limit}) at {mark}")]
     LimitExceeded {

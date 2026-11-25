@@ -210,10 +210,8 @@ impl Composer {
     }
 
     fn register_anchor(&mut self, name: String, node: Rc<Value>, mark: Mark) -> Result<()> {
-        if self.anchors.contains_key(&name) {
-            return Err(Error::DuplicateAnchor { name, mark });
-        }
-        if self.anchors.len() >= self.limits.max_anchors {
+        // YAML 1.2.2 allows redefining an anchor; later aliases see the new node.
+        if !self.anchors.contains_key(&name) && self.anchors.len() >= self.limits.max_anchors {
             return Err(Error::LimitExceeded {
                 kind: LimitKind::Anchors,
                 limit: self.limits.max_anchors,

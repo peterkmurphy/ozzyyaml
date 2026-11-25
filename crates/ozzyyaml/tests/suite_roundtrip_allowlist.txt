@@ -1,6 +1,5 @@
-# yaml-test-suite case IDs whose in.yaml must compose Ok via load_all (vendor/yaml-test-suite).
+# yaml-test-suite case IDs for acyclic emit→load data round-trip (not the compose gate).
 # Only valid cases (no 'error' marker). Never allowlist failing cases.
-# Discovered via discover_compose_passing_cases (ignored test).
 229Q
 26DV
 27NA
