@@ -1,5 +1,3 @@
-import pytest
-
 import ozzyyaml
 
 
@@ -45,9 +43,20 @@ def test_shared_alias_is_same_object():
     assert data[0] is data[1]
 
 
-def test_cycle_errors():
-    with pytest.raises(ozzyyaml.OzzyYamlError):
-        ozzyyaml.load("&a [*a]\n")
+def test_cycle_loads_natively():
+    # Compose keeps a cyclic root behind an owned shell when Rc::try_unwrap fails;
+    # the inner sequence is the self-referential node (same as Rust cyclic_sequence).
+    data = ozzyyaml.load("&a [*a]\n")
+    assert isinstance(data, list)
+    assert len(data) == 1
+    inner = data[0]
+    assert isinstance(inner, list)
+    assert inner[0] is inner
+
+
+def test_collection_mapping_key_becomes_tuple():
+    data = ozzyyaml.load("? [a, b]\n: c\n")
+    assert data == {("a", "b"): "c"}
 
 
 def test_bytes_input():
