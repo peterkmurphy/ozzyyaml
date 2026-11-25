@@ -214,7 +214,12 @@ impl Scanner<'_> {
                 max_indent = col0;
             }
 
-            if (*indent == 0 || col0 < *indent) && self.reader.peek() == Some('\t') {
+            // Spec §8.2 example 8.2 / suite R4YG: while the indent is still being
+            // auto-detected, leading spaces set it and a following tab is
+            // *content* of the first non-empty line (s-indent [63] counts spaces
+            // only); it is not an indentation error. Once the indent is known, a
+            // tab before reaching it is still rejected ([68] s-block-line-prefix).
+            if *indent != 0 && col0 < *indent && self.reader.peek() == Some('\t') {
                 return Err(scan_error(
                     "tab character where an indentation space is expected".into(),
                     start,
