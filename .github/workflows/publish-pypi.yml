@@ -50,7 +50,9 @@ jobs:
           . .venv/bin/activate
           pip install pytest
           pip install --no-index --find-links dist ozzyyaml
-          pytest tests -q
+          # Leave python/ so the source package does not shadow the wheel.
+          cd "$RUNNER_TEMP"
+          pytest "$GITHUB_WORKSPACE/python/tests" -q
       - uses: actions/upload-artifact@v6
         with:
           name: wheels-linux-${{ matrix.target }}
@@ -84,7 +86,9 @@ jobs:
           source .venv/Scripts/activate
           pip install pytest
           pip install --no-index --find-links dist ozzyyaml
-          pytest tests -q
+          # Leave python/ so the source package does not shadow the wheel.
+          cd "$RUNNER_TEMP"
+          pytest "$GITHUB_WORKSPACE/python/tests" -q
       - uses: actions/upload-artifact@v6
         with:
           name: wheels-windows-cp${{ matrix.python }}
@@ -117,7 +121,9 @@ jobs:
           . .venv/bin/activate
           pip install pytest
           pip install --no-index --find-links dist ozzyyaml
-          pytest tests -q
+          # Leave python/ so the source package does not shadow the wheel.
+          cd "$RUNNER_TEMP"
+          pytest "$GITHUB_WORKSPACE/python/tests" -q
       - uses: actions/upload-artifact@v6
         with:
           name: wheels-macos-${{ matrix.target }}

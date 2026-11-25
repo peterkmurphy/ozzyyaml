@@ -44,7 +44,9 @@ jobs:
           python -m venv .venv
           . .venv/bin/activate
           pip install dist/*.whl pytest
-          pytest tests -q
+          # Leave python/ so the source package does not shadow the wheel.
+          cd "$RUNNER_TEMP"
+          pytest "$GITHUB_WORKSPACE/python/tests" -q
 
   python-314t:
     name: python 3.14t smoke
@@ -79,11 +81,14 @@ jobs:
           python -m venv .venv
           . .venv/bin/activate
           pip install dist/*cp314t*.whl
-          python -c "import ozzyyaml; print('installed', ozzyyaml.__version__)"
       - name: Smoke import on free-threaded interpreter
+        # Import from outside python/: cwd would otherwise shadow the wheel with
+        # the source tree (no _native extension module).
+        working-directory: ${{ runner.temp }}
         run: |
-          . .venv/bin/activate
+          . "$GITHUB_WORKSPACE/python/.venv/bin/activate"
           python -c "import sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1"
+          python -c "import ozzyyaml; print('installed', ozzyyaml.__version__)"
           # Module opts into gil_used=true (Rc Value graphs). Import may
           # re-enable the GIL with a RuntimeWarning — that is expected.
           python -W default -c "import sys; import ozzyyaml; print('gil_enabled', sys._is_gil_enabled()); print(ozzyyaml.load('1\n'))"
