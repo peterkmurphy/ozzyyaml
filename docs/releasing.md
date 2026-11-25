@@ -52,6 +52,13 @@ git push origin v0.2.0
    - [publish-crates.yml](../.github/workflows/publish-crates.yml)
    - [publish-pypi.yml](../.github/workflows/publish-pypi.yml)
 
-PyPI builds Linux (x86_64 + aarch64), Windows (x64), and macOS (Apple Silicon)
-wheels plus an sdist. crates.io publishes parser → ozzyyaml → emit, with
-retries for index lag.
+PyPI builds Linux (x86_64 + aarch64), Windows (x64), and macOS (arm64 +
+x86_64) wheels for CPython 3.10–3.14 plus an sdist. crates.io publishes
+parser → ozzyyaml → emit, with retries for index lag. Do **not** add a
+versioned dependency from `ozzyyaml` back to `ozzyyaml-emit` (even
+dev-only): that creates a publish cycle. Round-trip tests live in
+`ozzyyaml-emit`.
+
+If a tag publish fails mid-chain (e.g. parser uploaded but compose/emit
+did not), fix on `main` then re-run **publish-crates** / **publish-pypi**
+via `workflow_dispatch` (already-published crate versions are skipped).

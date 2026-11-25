@@ -1,3 +1,7 @@
 target
 artifacts
 coverage
+# libFuzzer-generated inputs (keep checked-in *.yaml seeds)
+corpus/**/*
+!corpus/**/
+!corpus/**/*.yaml

@@ -4,6 +4,8 @@
 # versions and push a matching tag:
 #
 #   git tag v0.2.0 && git push origin v0.2.0
+#
+# workflow_dispatch can finish a partial publish (e.g. after a mid-chain failure).
 
 name: publish-crates
 
@@ -11,6 +13,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -33,8 +36,20 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
           set -euo pipefail
+          already_published() {
+            local pkg="$1"
+            local ver
+            ver="$(cargo metadata --no-deps --format-version 1 \
+              | python3 -c "import json,sys; d=json.load(sys.stdin); print(next(p['version'] for p in d['packages'] if p['name']=='${pkg}'))")"
+            curl -fsS -A 'ozzyyaml-publish' \
+              "https://crates.io/api/v1/crates/${pkg}/${ver}" >/dev/null 2>&1
+          }
           publish_with_retry() {
             local pkg="$1"
+            if already_published "${pkg}"; then
+              echo "${pkg} already on crates.io — skipping"
+              return 0
+            fi
             local attempt
             for attempt in 1 2 3 4 5 6 7 8; do
               echo "::group::cargo publish -p ${pkg} (attempt ${attempt})"
@@ -49,6 +64,8 @@ jobs:
             echo "Giving up on ${pkg}"
             return 1
           }
+          # No cycle: ozzyyaml must not depend on ozzyyaml-emit (even as a
+          # versioned path/dev-dep) or packaging blocks on an unpublished emit.
           publish_with_retry ozzyyaml-parser
           publish_with_retry ozzyyaml
           publish_with_retry ozzyyaml-emit

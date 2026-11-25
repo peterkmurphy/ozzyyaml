@@ -15,6 +15,3 @@ categories = ["parser-implementations", "encoding", "data-structures"]
 [dependencies]
 ozzyyaml-parser = { version = "0.2.0", path = "../ozzyyaml-parser" }
 thiserror = "2"
-
-[dev-dependencies]
-ozzyyaml-emit = { version = "0.2.0", path = "../ozzyyaml-emit" }

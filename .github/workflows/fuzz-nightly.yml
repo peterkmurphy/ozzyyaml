@@ -21,7 +21,13 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Run ${{ matrix.target }} (~15 min)
-        run: cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=900
+        run: |
+          extra=()
+          if [[ "${{ matrix.target }}" == "fuzz_roundtrip" ]]; then
+            # Rc cycles in Value graphs are intentional; suppress LSan only.
+            extra+=(-detect_leaks=0)
+          fi
+          cargo +nightly fuzz run "${{ matrix.target }}" -- -max_total_time=900 "${extra[@]}"
       - name: Upload crash artifacts
         if: failure()
         uses: actions/upload-artifact@v4
