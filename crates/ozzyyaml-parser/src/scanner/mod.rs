@@ -106,7 +106,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn fetch_next_token(&mut self) -> Result<()> {
-        self.skip_whitespace_and_comments();
+        self.skip_whitespace_and_comments()?;
         let mark = self.reader.mark();
         self.after_json_node = std::mem::take(&mut self.json_node_pending);
         if self.possible_key.is_some_and(|k| k.mark.line != mark.line) {
@@ -253,8 +253,29 @@ impl<'a> Scanner<'a> {
         Ok(())
     }
 
-    fn skip_whitespace_and_comments(&mut self) {
+    fn skip_whitespace_and_comments(&mut self) -> Result<()> {
         loop {
+            // Block indentation may use spaces only (§8.2.1); a tab in the
+            // line prefix before block content is a scan error (suite 4EJS).
+            // Leading tabs before a flow collection are allowed (6CA3, Q5MG).
+            if self.flow_level == 0 && self.reader.mark().column == 1 {
+                while self.reader.peek() == Some(' ') {
+                    self.reader.bump();
+                }
+                if self.reader.peek() == Some('\t') {
+                    let mut rest = self.reader.rest();
+                    while rest.starts_with('\t') || rest.starts_with(' ') {
+                        rest = &rest[1..];
+                    }
+                    let flow_ok = rest.starts_with('[') || rest.starts_with('{');
+                    if !flow_ok {
+                        return Err(scan_error(
+                            "tabs cannot be used as indentation".into(),
+                            self.reader.mark(),
+                        ));
+                    }
+                }
+            }
             let mut skipped_ws = false;
             while matches!(self.reader.peek(), Some(' ' | '\t')) {
                 skipped_ws = true;
@@ -280,6 +301,7 @@ impl<'a> Scanner<'a> {
             }
             break;
         }
+        Ok(())
     }
 
     fn skip_to_end_of_line(&mut self) {
