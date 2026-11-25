@@ -200,9 +200,11 @@ fn flow_single_pair_in_sequence_becomes_mapping() {
 }
 
 #[test]
-fn flow_collection_spans_lines_and_ignores_indentation() {
+fn flow_collection_may_span_lines_when_more_indented() {
+    // Content inside a flow node nested in block context must stay past the
+    // parent indent (yaml-test-suite 9C9N rejects dedenting to column 1).
     assert_eq!(
-        parse("a: [1,\n2]\nb: 3\n"),
+        parse("a: [1,\n  2]\nb: 3\n"),
         doc(vec![
             map(false),
             scalar("a"),
@@ -214,6 +216,15 @@ fn flow_collection_spans_lines_and_ignores_indentation() {
             scalar("3"),
             Event::MappingEnd
         ])
+    );
+}
+
+#[test]
+fn flow_collection_dedent_to_parent_indent_is_rejected() {
+    let err = parse_all("a: [1,\n2]\nb: 3\n", Limits::default()).unwrap_err();
+    assert!(
+        matches!(err, Error::Scan { .. }),
+        "expected scan error for 9C9N-style dedent, got {err}"
     );
 }
 
