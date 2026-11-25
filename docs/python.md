@@ -8,7 +8,8 @@ Coverage matches the Rust crates: YAML **1.2.2** parse, Core compose, and data
 round-trip emit, including block scalars, explicit keys, double-quoted
 escapes, and UTF-16/32 on `bytes` input (BOM or §5.2 null-pattern). See
 [conformance.md](conformance.md) for suite percentages and honest caveats
-(100% of valid `test.event` cases pass; emit is data equality, not
+(100% of valid `test.event` cases; 100% compose success for the same set via
+`load_all` / `load_all_value`; emit is data equality, not
 presentation-preserving).
 
 ## Install
@@ -84,10 +85,12 @@ The loader uses the YAML 1.2.2 Core schema, so values like `yes` stay strings
 rather than becoming booleans. Known tags are strict: `!!int twelve` and
 `!!bool yes` raise `OzzyYamlError`.
 
-Shared aliases that form a DAG become one Python object referenced from
-several places (`a is b`). **Cycles cannot be represented as ordinary lists
-and dicts**; `load` raises `OzzyYamlError` in that case. Use the structured
-Value API below when you need cycles.
+Shared aliases (including cycles) become one Python object referenced from
+several places (`a is b`). Collection **mapping keys** are coerced to hashable
+tuples so they can live in a `dict`: a sequence key becomes a `tuple` of
+items; a mapping key becomes a `tuple` of `(key, value)` pairs (nested
+recursively). Scalar keys are unchanged. Prefer the structured Value API below
+when you need the YAML graph without that key coercion.
 
 ## Structured Value API
 

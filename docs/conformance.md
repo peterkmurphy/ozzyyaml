@@ -8,9 +8,10 @@ round-trip emit, with the caveats below.
 - Event parser language: multi-line plain/quoted folding (§8.1.3), block
   scalars `|` / `>` (§8.1.4–§8.1.6), full double-quoted escapes (§7.3.2),
   explicit keys (`?`), `%YAML` / `%TAG` directives, Unicode anchors
-- Core compose with **strict** known tags (`!!int twelve` is an error)
-- Emit → load data round-trip for acyclic documents in the
-  compose allowlist
+- Core compose with **strict** known tags (`!!int twelve` is an error),
+  including YAML 1.2.2 **anchor redefinition**
+- Emit → load data round-trip for acyclic documents in the round-trip
+  allowlist
 - Chapter 5 character classes: `c-printable` / `nb-char` / `nb-json`, reserved
   `@`/`\`` plain starts, and `ns-uri-char` / `ns-tag-char` for tags
 - Byte APIs (`from_slice` / `load_all_from_slice`): UTF-8, UTF-16LE/BE, and
@@ -24,18 +25,26 @@ round-trip emit, with the caveats below.
 - **yaml-test-suite events:** **100%** of valid cases with `test.event`
   (255 / 255) match exactly, enforced by the hard gate
   `all_valid_event_suite_cases_match` in
-  `crates/ozzyyaml-parser/tests/yaml_test_suite.rs`. Compose and round-trip
-  suites remain on separate allowlists (`crates/ozzyyaml/tests/`).
-  Event coverage is not a claim of full emit presentation or non-Core schemas.
+  `crates/ozzyyaml-parser/tests/yaml_test_suite.rs`.
+- **yaml-test-suite compose:** **100%** of the same valid cases (255 / 255)
+  compose successfully via Rust `load_all` and Python `load_all` /
+  `load_all_value`, enforced by `all_valid_cases_compose_ok` in
+  `crates/ozzyyaml/tests/yaml_test_suite_compose.rs` and
+  `python/tests/test_yaml_test_suite_compose.py`. This is compose-success
+  only (not `in.json` tree equality, not Python `test.event` rendering).
+- **Shape / round-trip allowlists** remain separate
+  (`suite_shape_allowlist.txt`, `suite_roundtrip_allowlist.txt`).
 - **Emit** does not preserve comments, tags as written, or source layout —
   only `Value` data equality after dump→load.
 - **Core only:** `yes` / `no` stay strings; no YAML 1.1 merge keys.
 
 Design tracks:
 [grammar complete](superpowers/specs/2026-11-25-ozzyyaml-grammar-complete-design.md),
+[Python + compose suite](superpowers/specs/2026-11-25-ozzyyaml-python-compose-suite-design.md),
 [conformance](superpowers/specs/2026-11-24-ozzyyaml-conformance-design.md),
 [Chapter 5 chars](superpowers/specs/2026-11-25-ozzyyaml-chapter5-chars-design.md).  
 Plans:
 [grammar complete](superpowers/plans/2026-11-25-ozzyyaml-grammar-complete.md),
+[Python + compose suite](superpowers/plans/2026-11-25-ozzyyaml-python-compose-suite.md),
 [conformance](superpowers/plans/2026-11-24-ozzyyaml-conformance.md),
 [Chapter 5](superpowers/plans/2026-11-25-ozzyyaml-chapter5-chars.md).
