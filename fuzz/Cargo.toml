@@ -1,0 +1,31 @@
+[package]
+name = "ozzyyaml-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Standalone package — not a workspace member of the root crate.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+ozzyyaml-parser = { path = "../crates/ozzyyaml-parser" }
+ozzyyaml = { path = "../crates/ozzyyaml" }
+ozzyyaml-emit = { path = "../crates/ozzyyaml-emit" }
+
+[[bin]]
+name = "fuzz_parse_str"
+path = "fuzz_targets/fuzz_parse_str.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_roundtrip"
+path = "fuzz_targets/fuzz_roundtrip.rs"
+test = false
+doc = false
+bench = false
