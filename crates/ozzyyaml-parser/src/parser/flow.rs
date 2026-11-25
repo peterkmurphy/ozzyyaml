@@ -25,21 +25,34 @@ impl Parser<'_> {
         Ok(self.peek()?.is_some_and(is_end))
     }
 
+    /// Starts the single-pair mapping of an implicit flow-sequence entry
+    /// (`[a: 1]`, `["a":b]`, `[: v]`). A leading `:` means an empty key;
+    /// the key node itself is produced by `State::FlowPairKey`.
+    fn parse_flow_pair(&mut self) -> Result<Event> {
+        let mark = match self.peek()?.cloned() {
+            Some(Token::Key { mark }) => {
+                self.bump();
+                mark
+            }
+            Some(Token::Value { mark }) => mark,
+            other => return Err(unexpected_or_eof(other.as_ref())),
+        };
+        self.start_collection(State::FlowPairKey, mark)?;
+        Ok(Event::MappingStart {
+            anchor: None,
+            tag: None,
+            flow: true,
+        })
+    }
+
     pub(super) fn next_flow_sequence_entry(&mut self, first: bool) -> Result<Option<Event>> {
         if self.flow_separator(first, |t| matches!(t, Token::FlowSequenceEnd { .. }))? {
             self.bump();
             return self.end_collection(Event::SequenceEnd);
         }
         self.state = State::FlowSequenceEntry;
-        if let Some(Token::Key { mark }) = self.peek()?.cloned() {
-            // `[a: 1]` is a sequence entry holding a single-pair mapping.
-            self.bump();
-            self.start_collection(State::FlowPairKey, mark)?;
-            return Ok(Some(Event::MappingStart {
-                anchor: None,
-                tag: None,
-                flow: true,
-            }));
+        if matches!(self.peek()?, Some(Token::Key { .. } | Token::Value { .. })) {
+            return self.parse_flow_pair().map(Some);
         }
         self.parse_node(false).map(Some)
     }

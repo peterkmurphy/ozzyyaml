@@ -44,11 +44,18 @@ pub(crate) struct Scanner<'a> {
     possible_key_stack: Vec<Option<PossibleKey>>,
     /// Number of currently open flow collections (`[` / `{`).
     flow_level: usize,
-    /// Reader index just past the most recent quoted scalar; a `:` directly
-    /// there is a value indicator inside flow collections (`{"a":1}`).
-    quoted_end: Option<usize>,
+    /// Reader index just past the most recent JSON-like node (quoted scalar or
+    /// flow collection); a `:` directly there is a value indicator inside flow
+    /// collections (`{"a":1}`, `[{a: b}:c]`).
+    json_node_end: Option<usize>,
+    /// The previous token was a JSON-like node, so a `:` at the start of the
+    /// next token (even after whitespace, a comment or a line break) is an
+    /// adjacent value indicator inside flow collections (`{ "a"\n :b }`).
+    after_json_node: bool,
     /// Whether a simple key (or block `?` / `-` / empty-key `:`) may start here.
     simple_key_allowed: bool,
+    /// A JSON-like node was just scanned (consumed by the next token fetch).
+    json_node_pending: bool,
     done: bool,
 }
 
@@ -62,8 +69,10 @@ impl<'a> Scanner<'a> {
             possible_key: None,
             possible_key_stack: Vec::new(),
             flow_level: 0,
-            quoted_end: None,
+            json_node_end: None,
+            after_json_node: false,
             simple_key_allowed: true,
+            json_node_pending: false,
             done: false,
         }
     }
@@ -104,6 +113,7 @@ impl<'a> Scanner<'a> {
     fn fetch_next_token(&mut self) -> Result<()> {
         self.skip_whitespace_and_comments();
         let mark = self.reader.mark();
+        self.after_json_node = std::mem::take(&mut self.json_node_pending);
         if self.possible_key.is_some_and(|k| k.mark.line != mark.line) {
             self.possible_key = None;
         }
@@ -144,14 +154,14 @@ impl<'a> Scanner<'a> {
                 self.save_possible_key(mark);
                 let value = self.scan_single_quoted(mark)?;
                 self.push_scalar(value, ScalarStyle::SingleQuoted, mark);
-                self.quoted_end = Some(self.reader.mark().index);
+                self.mark_json_node_end();
                 self.simple_key_allowed = false;
             }
             '"' => {
                 self.save_possible_key(mark);
                 let value = self.scan_double_quoted(mark)?;
                 self.push_scalar(value, ScalarStyle::DoubleQuoted, mark);
-                self.quoted_end = Some(self.reader.mark().index);
+                self.mark_json_node_end();
                 self.simple_key_allowed = false;
             }
             '|' | '>' if self.flow_level == 0 => {
@@ -191,6 +201,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn fetch_anchor_or_alias(&mut self, indicator: char, mark: Mark) -> Result<()> {
+        self.after_json_node = false;
         self.save_possible_key(mark);
         self.reader.bump();
         let mut name = String::new();

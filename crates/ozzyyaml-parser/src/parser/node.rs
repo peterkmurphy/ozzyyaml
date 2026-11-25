@@ -43,6 +43,13 @@ impl Parser<'_> {
     /// Parses one node (optionally anchored/tagged). When `allow_empty` is
     /// set, a missing node yields an empty plain scalar.
     pub(super) fn parse_node(&mut self, allow_empty: bool) -> Result<Event> {
+        self.parse_node_in(allow_empty, false)
+    }
+
+    /// Like [`Self::parse_node`]; `indentless` additionally accepts a block
+    /// sequence whose `-` entries sit at the parent mapping's indent
+    /// (`key:\n- a`), which only a block mapping value may contain.
+    pub(super) fn parse_node_in(&mut self, allow_empty: bool, indentless: bool) -> Result<Event> {
         let (anchor, tag) = self.parse_properties()?;
         let has_props = anchor.is_some() || tag.is_some();
         match self.peek()? {
@@ -63,6 +70,15 @@ impl Parser<'_> {
             Some(Token::BlockSequenceStart { .. }) => {
                 let mark = self.bump_mark()?;
                 self.start_collection(State::BlockSequenceEntry, mark)?;
+                Ok(Event::SequenceStart {
+                    anchor,
+                    tag,
+                    flow: false,
+                })
+            }
+            Some(Token::BlockEntry { mark }) if indentless => {
+                let mark = *mark;
+                self.start_collection(State::IndentlessSequenceEntry, mark)?;
                 Ok(Event::SequenceStart {
                     anchor,
                     tag,

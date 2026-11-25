@@ -22,6 +22,8 @@ enum State {
     DocumentEnd,
     StreamEnd,
     BlockSequenceEntry,
+    /// `key:\n- a` — entries at the parent mapping's indent, no `BlockEnd`.
+    IndentlessSequenceEntry,
     BlockMappingKey,
     BlockMappingValue,
     FlowSequenceFirst,
@@ -143,6 +145,13 @@ impl<'a> Parser<'a> {
                 }
                 other => Err(unexpected_or_eof(other)),
             },
+            State::IndentlessSequenceEntry => match self.peek()? {
+                Some(Token::BlockEntry { .. }) => {
+                    self.bump();
+                    self.parse_node(true).map(Some)
+                }
+                _ => self.end_collection(Event::SequenceEnd),
+            },
             State::BlockMappingKey => match self.peek()? {
                 Some(Token::Key { .. }) => {
                     self.bump();
@@ -164,7 +173,7 @@ impl<'a> Parser<'a> {
                 self.state = State::BlockMappingKey;
                 if matches!(self.peek()?, Some(Token::Value { .. })) {
                     self.bump();
-                    self.parse_node(true).map(Some)
+                    self.parse_node_in(true, true).map(Some)
                 } else {
                     Ok(Some(empty_scalar(None, None)))
                 }

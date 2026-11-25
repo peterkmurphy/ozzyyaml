@@ -13,11 +13,19 @@ impl Scanner<'_> {
             return true;
         }
         self.flow_level > 0
-            && (self.quoted_end == Some(mark.index)
+            && (self.after_json_node
+                || self.json_node_end == Some(mark.index)
                 || self
                     .reader
                     .peek2()
                     .is_some_and(|(_, next)| is_flow_indicator(next)))
+    }
+
+    /// Records that a quoted scalar or flow collection just ended, so a
+    /// following `:` is a value indicator without needing a blank after it.
+    pub(super) fn mark_json_node_end(&mut self) {
+        self.json_node_end = Some(self.reader.mark().index);
+        self.json_node_pending = true;
     }
 
     pub(super) fn fetch_flow_collection_start(&mut self, indicator: char, mark: Mark) {
@@ -47,6 +55,7 @@ impl Scanner<'_> {
         self.flow_level -= 1;
         self.possible_key = self.possible_key_stack.pop().unwrap_or(None);
         self.simple_key_allowed = false;
+        self.mark_json_node_end();
         self.queue.push_back(if indicator == ']' {
             Token::FlowSequenceEnd { mark }
         } else {
