@@ -99,7 +99,9 @@ macOS (arm64 + x86_64), and Windows; CI also smoke-tests free-threaded
 7. Trusted publishing (OIDC) — done
 8. YAML 1.2.2 conformance — done: **255/255** valid events + **78/78** invalid
    rejections ([status](docs/conformance.md))
-9. Optional later: Serde, PyYAML-compat quirks, emit presentation fidelity
+9. `0.2.0` pre-release line — PyO3 0.30, CPython 3.10–3.14 wheels (incl. macOS
+   Intel), 3.14t smoke, cargo-fuzz CI ([fuzz findings](docs/superpowers/fuzz-findings.md))
+10. Optional later: Serde, PyYAML-compat quirks, emit presentation fidelity
 
 ## Learn more
 

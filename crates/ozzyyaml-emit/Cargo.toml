@@ -13,5 +13,5 @@ keywords = ["yaml", "emit", "serialize", "anchors"]
 categories = ["encoding", "parser-implementations"]
 
 [dependencies]
-ozzyyaml = { version = "0.1.0", path = "../ozzyyaml" }
+ozzyyaml = { version = "0.2.0", path = "../ozzyyaml" }
 thiserror = "2"
