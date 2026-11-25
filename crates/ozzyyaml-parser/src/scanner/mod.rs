@@ -180,7 +180,7 @@ impl<'a> Scanner<'a> {
                 self.push_scalar(value, style, mark);
                 self.simple_key_allowed = true;
             }
-            '#' if self.after_json_node => {
+            '#' if self.after_json_node || self.flow_level > 0 => {
                 return Err(scan_error(
                     "comment must be separated from previous token by whitespace".into(),
                     mark,
@@ -192,6 +192,23 @@ impl<'a> Scanner<'a> {
                         "reserved indicators can't start a plain scalar".into(),
                         mark,
                     ));
+                }
+                // [126] ns-plain-first: `-` / `?` / `:` may start a plain scalar
+                // only when followed by plain-safe (suite YJV2, G5U8).
+                if matches!(c, '-' | '?' | ':') {
+                    let next = self.reader.peek2().map(|(_, n)| n);
+                    let plain_safe = match next {
+                        Some(n) if crate::chars::is_ns_char(n) => {
+                            !(self.flow_level > 0 && crate::chars::is_flow_indicator(n))
+                        }
+                        _ => false,
+                    };
+                    if !plain_safe {
+                        return Err(scan_error(
+                            format!("indicator `{c}` cannot start a plain scalar here"),
+                            mark,
+                        ));
+                    }
                 }
                 self.save_possible_key(mark);
                 let start_line = mark.line;
@@ -282,14 +299,15 @@ impl<'a> Scanner<'a> {
                 self.reader.bump();
             }
             if self.reader.peek() == Some('#') {
-                // After a quoted/flow ("JSON") node, `#` must be separated by
-                // whitespace (suite SU5Z). Elsewhere a `#` still starts a
-                // comment even if a prior scan already consumed indentation.
+                // `#` needs preceding whitespace (or BOL). After JSON-like
+                // nodes or inside flow, a glued `#` is an error (SU5Z, CVW2).
                 let col = self.reader.mark().column;
-                if skipped_ws || col == 1 || !self.json_node_pending {
+                if skipped_ws || col == 1 {
                     self.skip_to_end_of_line();
-                } else {
+                } else if self.json_node_pending || self.flow_level > 0 {
                     break;
+                } else {
+                    self.skip_to_end_of_line();
                 }
             }
             if self.reader.peek() == Some('\n') {

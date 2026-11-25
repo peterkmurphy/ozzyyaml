@@ -160,11 +160,20 @@ impl Scanner<'_> {
             _ => {}
         }
 
-        // Spaces then optional comment to end of line.
+        // Spaces then optional comment to end of line. A `#` glued to the
+        // indicator (no whitespace) is invalid (suite X4QW).
+        let mut saw_ws = false;
         while matches!(self.reader.peek(), Some(' ' | '\t')) {
+            saw_ws = true;
             self.reader.bump();
         }
         if self.reader.peek() == Some('#') {
+            if !saw_ws {
+                return Err(scan_error(
+                    "comment after block scalar indicator requires whitespace".into(),
+                    self.reader.mark(),
+                ));
+            }
             while self.reader.peek().is_some_and(|c| c != '\n') {
                 self.reader.bump();
             }

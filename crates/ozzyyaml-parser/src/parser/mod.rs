@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::event::Event;
 use crate::limits::Limits;
 use crate::mark::Mark;
@@ -59,6 +59,8 @@ pub struct Parser<'a> {
     /// Mark of a token consumed while producing the event in progress.
     /// Committed to `last_mark` only when that event is `Ok(Some(_))`.
     pending_mark: Option<Mark>,
+    /// Line of the current block-mapping `Key` token (for same-line checks).
+    block_mapping_key_line: Option<u32>,
 }
 
 impl<'a> Parser<'a> {
@@ -79,6 +81,7 @@ impl<'a> Parser<'a> {
             tag_directives: Vec::new(),
             last_mark: Mark::default(),
             pending_mark: None,
+            block_mapping_key_line: None,
         })
     }
 
@@ -153,8 +156,10 @@ impl<'a> Parser<'a> {
                 _ => self.end_collection(Event::SequenceEnd),
             },
             State::BlockMappingKey => match self.peek()? {
-                Some(Token::Key { .. }) => {
+                Some(Token::Key { mark }) => {
+                    let key_line = mark.line;
                     self.bump();
+                    self.block_mapping_key_line = Some(key_line);
                     self.state = State::BlockMappingValue;
                     // Explicit `?` keys may contain a zero-indent sequence at the
                     // mapping's own indent (libyaml `parse_node(block=1, indentless=1)`).
@@ -162,6 +167,7 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::Value { .. }) => {
                     // Empty key: `: value` or lone `:` after a prior entry.
+                    self.block_mapping_key_line = None;
                     self.state = State::BlockMappingValue;
                     Ok(Some(empty_scalar(None, None)))
                 }
@@ -173,8 +179,25 @@ impl<'a> Parser<'a> {
             },
             State::BlockMappingValue => {
                 self.state = State::BlockMappingKey;
+                let key_line = self.block_mapping_key_line.take();
                 if matches!(self.peek()?, Some(Token::Value { .. })) {
                     self.bump();
+                    // `key: - a` on one line is invalid (5U3A). Compact
+                    // `: - a` after a `?` key on a prior line remains valid.
+                    match self.peek()? {
+                        Some(Token::BlockSequenceStart { mark })
+                        | Some(Token::BlockEntry { mark })
+                            if key_line == Some(mark.line) =>
+                        {
+                            return Err(Error::Parse {
+                                message:
+                                    "block sequence value cannot start on the same line as its key"
+                                        .into(),
+                                mark: *mark,
+                            });
+                        }
+                        _ => {}
+                    }
                     self.parse_node_in(true, true).map(Some)
                 } else {
                     Ok(Some(empty_scalar(None, None)))
