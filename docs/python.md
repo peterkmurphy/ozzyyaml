@@ -18,8 +18,13 @@ presentation-preserving).
 pip install ozzyyaml
 ```
 
-Requires Python 3.10 or newer. Wheels are published for Linux (x86_64 +
-aarch64), Windows (x64), and macOS (Apple Silicon).
+Requires Python 3.10 or newer. Wheels are published per CPython interpreter
+for **3.10–3.14** on Linux (x86_64 + aarch64), Windows (x64), and macOS
+(Apple Silicon + Intel via cross-build).
+
+**Free-threading:** CI smoke-tests import/`load` on CPython **3.14t**
+(`PYTHON_GIL=0`). That is a smoke gate, not a full free-threading support
+claim — do not treat ozzyyaml as certified for free-threaded production yet.
 
 For cutting a release (Trusted Publishing, tags, version bumps), see
 [releasing.md](releasing.md).

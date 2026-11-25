@@ -16,10 +16,10 @@ on:
 permissions:
   contents: read
 
-# PyO3 0.23 supports through 3.13. Do not use --find-interpreter: manylinux
-# images now ship 3.14 and the build fails.
+# Per-interpreter wheels (not abi3). Explicit list avoids --find-interpreter
+# picking unexpected runtimes on manylinux images.
 env:
-  MATURIN_INTERPRETERS: "3.10 3.11 3.12 3.13"
+  MATURIN_INTERPRETERS: "3.10 3.11 3.12 3.13 3.14"
 
 jobs:
   linux:
@@ -59,7 +59,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.11", "3.12", "3.13"]
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -87,9 +87,11 @@ jobs:
           path: python/dist
 
   macos:
-    # macos-13 (Intel) queues for hours on GitHub-hosted runners; ship
-    # Apple Silicon wheels for 0.1.x. Add x86_64 later if demand appears.
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -98,10 +100,11 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          target: aarch64
+          target: ${{ matrix.target }}
           working-directory: python
           args: --release --out dist --interpreter ${{ env.MATURIN_INTERPRETERS }}
-      - name: Smoke-test
+      - name: Smoke-test (aarch64 only)
+        if: matrix.target == 'aarch64-apple-darwin'
         working-directory: python
         run: |
           python -m venv .venv
@@ -111,7 +114,7 @@ jobs:
           pytest tests -q
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-macos-aarch64
+          name: wheels-macos-${{ matrix.target }}
           path: python/dist
 
   sdist:

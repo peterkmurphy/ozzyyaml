@@ -84,8 +84,9 @@ assert v[0] is v[1]
 ```
 
 See [docs/python.md](docs/python.md) for install steps, limits, and behaviour
-around aliases and cycles. CI builds and smoke-tests wheels for Linux, macOS
-(Apple Silicon), and Windows.
+around aliases and cycles. Wheels ship for CPython **3.10–3.14** on Linux,
+macOS (arm64 + x86_64), and Windows; CI also smoke-tests free-threaded
+**3.14t** (import/`load` only — not a full support claim).
 
 ## Roadmap
 

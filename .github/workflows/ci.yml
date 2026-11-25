@@ -45,3 +45,30 @@ jobs:
           . .venv/bin/activate
           pip install dist/*.whl pytest
           pytest tests -q
+
+  python-314t:
+    name: python 3.14t smoke
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14t"
+      - name: Confirm free-threaded interpreter
+        run: |
+          python --version --version
+          python -c "import sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1"
+      - name: Install Maturin
+        run: pip install maturin
+      - name: Build, install, smoke import
+        env:
+          PYTHON_GIL: "0"
+        run: |
+          maturin develop --release
+          python -c "import ozzyyaml; print(ozzyyaml.load('1\n'))"
