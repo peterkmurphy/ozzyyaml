@@ -144,7 +144,7 @@ impl Scanner<'_> {
             if rest.starts_with("---") || rest.starts_with("...") {
                 let after = rest.get(3..).unwrap_or("");
                 return after.is_empty()
-                    || after.starts_with(|c: char| matches!(c, ' ' | '\t' | '\n' | '\r'));
+                    || after.starts_with([' ', '\t', '\n', '\r']);
             }
             if !rest.is_empty() && !rest.starts_with('\n') && !rest.starts_with('\r') {
                 return false;
