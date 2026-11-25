@@ -10,7 +10,7 @@ round-trip emit, with the caveats below.
   explicit keys (`?`), `%YAML` / `%TAG` directives, Unicode anchors
 - Core compose with **strict** known tags (`!!int twelve` is an error)
 - Emit → load data round-trip for acyclic documents in the
-  parser∩compose allowlist
+  compose allowlist
 - Chapter 5 character classes: `c-printable` / `nb-char` / `nb-json`, reserved
   `@`/`\`` plain starts, and `ns-uri-char` / `ns-tag-char` for tags
 - Byte APIs (`from_slice` / `load_all_from_slice`): UTF-8, UTF-16LE/BE, and
@@ -21,18 +21,21 @@ round-trip emit, with the caveats below.
 
 ## Honest caveats
 
-- **yaml-test-suite events:** about **91%** of valid cases with `test.event`
-  (233 / 255) are allowlisted today. Remaining misses are mostly compact
-  empty-key / nested-flow edge cases, a few event-shape mismatches, and
-  tabs used as block-scalar indentation. See
-  `crates/ozzyyaml-parser/tests/suite_allowlist.txt`.
+- **yaml-test-suite events:** **100%** of valid cases with `test.event`
+  (255 / 255) match exactly, enforced by the hard gate
+  `all_valid_event_suite_cases_match` in
+  `crates/ozzyyaml-parser/tests/yaml_test_suite.rs`. Compose and round-trip
+  suites remain on separate allowlists (`crates/ozzyyaml/tests/`).
+  Event coverage is not a claim of full emit presentation or non-Core schemas.
 - **Emit** does not preserve comments, tags as written, or source layout —
   only `Value` data equality after dump→load.
 - **Core only:** `yes` / `no` stay strings; no YAML 1.1 merge keys.
 
 Design tracks:
+[grammar complete](superpowers/specs/2026-11-25-ozzyyaml-grammar-complete-design.md),
 [conformance](superpowers/specs/2026-11-24-ozzyyaml-conformance-design.md),
 [Chapter 5 chars](superpowers/specs/2026-11-25-ozzyyaml-chapter5-chars-design.md).  
 Plans:
+[grammar complete](superpowers/plans/2026-11-25-ozzyyaml-grammar-complete.md),
 [conformance](superpowers/plans/2026-11-24-ozzyyaml-conformance.md),
 [Chapter 5](superpowers/plans/2026-11-25-ozzyyaml-chapter5-chars.md).

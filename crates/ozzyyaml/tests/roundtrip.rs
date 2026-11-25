@@ -1,7 +1,7 @@
 //! Emit → parse round-trip.
 //!
-//! Covers hand-written escape cases (E1) and the intersection of the parser
-//! event allowlist with the compose allowlist. Cyclic documents are skipped
+//! Covers hand-written escape cases (E1) and the compose allowlist (all of
+//! which the parser handles). Cyclic documents are skipped
 //! because structural `PartialEq` is not cycle-safe; equality uses float
 //! bit-patterns so NaN round-trips.
 
@@ -113,9 +113,9 @@ fn suite_allowlist_roundtrip_acyclic() {
         "yaml-test-suite submodule missing; run `git submodule update --init`"
     );
 
-    let parser_ids = read_id_list("../ozzyyaml-parser/tests/suite_allowlist.txt");
-    let compose_ids = read_id_list("tests/suite_allowlist.txt");
-    let mut ids: Vec<_> = parser_ids.intersection(&compose_ids).cloned().collect();
+    // The parser now passes every valid `test.event` case, so the compose
+    // allowlist alone selects the round-trip set.
+    let mut ids: Vec<_> = read_id_list("tests/suite_allowlist.txt").into_iter().collect();
     ids.sort();
     assert!(
         ids.len() >= 100,

@@ -1,7 +1,5 @@
-//! Runs allowlisted cases from the official yaml-test-suite (`data` branch layout:
-//! one directory per case containing `in.yaml` and `test.event`).
-//!
-//! Only IDs listed in `suite_allowlist.txt` are asserted. Never add a case that fails.
+//! Runs every valid (non-`error`) case from the official yaml-test-suite (`data` branch layout:
+//! one directory per case containing `in.yaml` and `test.event`) and asserts exact event equality.
 
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -89,15 +87,6 @@ fn render(events: &[Event]) -> Vec<String> {
         .collect()
 }
 
-fn allowlist() -> Vec<String> {
-    include_str!("suite_allowlist.txt")
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .map(String::from)
-        .collect()
-}
-
 fn valid_event_suite_ids(root: &std::path::Path) -> Vec<String> {
     let mut ids: Vec<_> = std::fs::read_dir(root)
         .expect("suite root")
@@ -116,15 +105,15 @@ fn valid_event_suite_ids(root: &std::path::Path) -> Vec<String> {
 }
 
 #[test]
-fn allowlisted_cases_match_expected_events() {
+fn all_valid_event_suite_cases_match() {
     let root = suite_root();
     assert!(
         root.join("229Q").is_dir(),
         "yaml-test-suite submodule missing; run `git submodule update --init`"
     );
 
-    let ids = allowlist();
-    assert!(!ids.is_empty(), "allowlist must not be empty");
+    let ids = valid_event_suite_ids(&root);
+    assert!(!ids.is_empty(), "no valid suite cases found");
 
     let mut failures = Vec::new();
     for id in &ids {
@@ -151,78 +140,4 @@ fn allowlisted_cases_match_expected_events() {
     }
 
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-}
-
-#[test]
-#[ignore = "Phase 0 report: run with --ignored --nocapture"]
-fn report_all_valid_suite_failures() {
-    let root = suite_root();
-    let allow: std::collections::HashSet<_> = allowlist().into_iter().collect();
-    let mut fail = 0usize;
-    let mut pass = 0usize;
-    for id in valid_event_suite_ids(&root) {
-        let dir = root.join(&id);
-        let input = std::fs::read_to_string(dir.join("in.yaml")).unwrap();
-        let expected: Vec<String> = std::fs::read_to_string(dir.join("test.event"))
-            .unwrap()
-            .lines()
-            .map(String::from)
-            .collect();
-        match parse_str(&input) {
-            Ok(ev) if render(&ev) == expected => {
-                pass += 1;
-            }
-            Ok(ev) => {
-                fail += 1;
-                let on_allow = allow.contains(&id);
-                println!("FAIL {id} mismatch allowlisted={on_allow}");
-                let _ = ev;
-            }
-            Err(e) => {
-                fail += 1;
-                println!("FAIL {id} error allowlisted={} {e}", allow.contains(&id));
-            }
-        }
-    }
-    println!("SUMMARY pass={pass} fail={fail}");
-}
-
-/// Prints IDs of top-level suite cases (in.yaml + test.event, no `error` marker) whose
-/// rendered events exactly match. Use to find candidates for `suite_allowlist.txt`.
-#[test]
-#[ignore = "manual discovery"]
-fn discover_passing_suite_cases() {
-    let root = suite_root();
-    let mut ids: Vec<String> = std::fs::read_dir(&root)
-        .expect("suite root")
-        .filter_map(Result::ok)
-        .filter(|e| e.path().is_dir())
-        .map(|e| e.file_name().to_string_lossy().into_owned())
-        .collect();
-    ids.sort();
-
-    let mut passing = Vec::new();
-    for id in ids {
-        let dir = root.join(&id);
-        if dir.join("error").exists() {
-            continue;
-        }
-        let (Ok(input), Ok(ev)) = (
-            std::fs::read_to_string(dir.join("in.yaml")),
-            std::fs::read_to_string(dir.join("test.event")),
-        ) else {
-            continue;
-        };
-        let expected: Vec<String> = ev.lines().map(String::from).collect();
-        let result = std::panic::catch_unwind(|| parse_str(&input).map(|e| render(&e)));
-        if let Ok(Ok(actual)) = result {
-            if actual == expected {
-                passing.push(id);
-            }
-        }
-    }
-    println!("PASSING_COUNT={}", passing.len());
-    for id in &passing {
-        println!("PASS {id}");
-    }
 }

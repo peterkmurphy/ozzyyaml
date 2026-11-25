@@ -8,7 +8,7 @@ Coverage matches the Rust crates: YAML **1.2.2** parse, Core compose, and data
 round-trip emit, including block scalars, explicit keys, double-quoted
 escapes, and UTF-16/32 on `bytes` input (BOM or §5.2 null-pattern). See
 [conformance.md](conformance.md) for suite percentages and honest caveats
-(~91% of valid `test.event` cases allowlisted; emit is data equality, not
+(100% of valid `test.event` cases pass; emit is data equality, not
 presentation-preserving).
 
 ## Install

@@ -4,7 +4,7 @@
 (parse, Core compose, data round-trip emit; `bytes` accept UTF-16/32 BOM).
 See the repo
 [conformance notes](https://github.com/peterkmurphy/ozzyyaml/blob/main/docs/conformance.md)
-for suite coverage (~91% of valid event cases) and caveats. Licensed under
+for suite coverage (100% of valid event cases) and caveats. Licensed under
 the BSD-3-Clause.
 
 ozzyyaml exists because common stacks still struggle with parts of the 1.2.2
