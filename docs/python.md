@@ -22,9 +22,11 @@ Requires Python 3.10 or newer. Wheels are published per CPython interpreter
 for **3.10–3.14** on Linux (x86_64 + aarch64), Windows (x64), and macOS
 (Apple Silicon + Intel via cross-build).
 
-**Free-threading:** CI smoke-tests import/`load` on CPython **3.14t**
-(`PYTHON_GIL=0`). That is a smoke gate, not a full free-threading support
-claim — do not treat ozzyyaml as certified for free-threaded production yet.
+**Free-threading:** CI builds a **3.14t** wheel and smoke-tests import/`load`
+on that interpreter. The native module still declares `gil_used = true`
+(structured `Value` graphs use `Rc` / are unsendable), so importing on a
+free-threaded build may re-enable the GIL. That is a smoke gate, not a full
+free-threading support claim.
 
 For cutting a release (Trusted Publishing, tags, version bumps), see
 [releasing.md](releasing.md).

@@ -65,16 +65,28 @@ jobs:
           python --version --version
           python -c "import sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1"
       - name: Install Maturin
-        run: pip install maturin
-      - name: Build wheel, install into venv, smoke import
+        run: pip install "maturin>=1.8"
+      - name: Build free-threaded wheel
         # Prefer build+venv over `maturin develop`: runner Pythons are often
         # PEP 668-managed, and develop installs into the active env.
         run: |
-          maturin build --release --out dist
+          maturin build --release --out dist --interpreter python
+          ls -la dist
+          # Must be a cp314t wheel; a plain cp314 wheel will not install on 3.14t.
+          ls dist/*cp314t*.whl
+      - name: Install wheel into venv
+        run: |
           python -m venv .venv
           . .venv/bin/activate
-          pip install dist/*.whl
-          PYTHON_GIL=0 python -c "import sys; assert not sys._is_gil_enabled(); import ozzyyaml; print(ozzyyaml.load('1\n'))"
+          pip install dist/*cp314t*.whl
+          python -c "import ozzyyaml; print('installed', ozzyyaml.__version__)"
+      - name: Smoke import on free-threaded interpreter
+        run: |
+          . .venv/bin/activate
+          python -c "import sysconfig; assert sysconfig.get_config_var('Py_GIL_DISABLED') == 1"
+          # Module opts into gil_used=true (Rc Value graphs). Import may
+          # re-enable the GIL with a RuntimeWarning — that is expected.
+          python -W default -c "import sys; import ozzyyaml; print('gil_enabled', sys._is_gil_enabled()); print(ozzyyaml.load('1\n'))"
 
   fuzz:
     name: fuzz (bounded)

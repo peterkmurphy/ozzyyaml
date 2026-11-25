@@ -276,7 +276,9 @@ fn dump_all(docs: Bound<'_, PyAny>, style: &str) -> PyResult<String> {
     dump_all_with_options(&values, &opts).map_err(map_err)
 }
 
-#[pymodule]
+// Rc-backed Value graphs are intentionally unsendable; keep the GIL while
+// free-threading support is only a build/import smoke, not a concurrency claim.
+#[pymodule(gil_used = true)]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("OzzyYamlError", m.py().get_type::<OzzyYamlError>())?;
