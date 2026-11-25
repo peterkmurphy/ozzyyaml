@@ -40,9 +40,9 @@ fn parse_exact_event_sequence() {
 fn parse_folded_plain_lines() {
     // Multi-line plains fold (§8.1.3); they are not a second root document.
     let evs = parse_str("a\nb\n").unwrap();
-    assert!(evs.iter().any(
-        |e| matches!(e, Event::Scalar { value, .. } if value == "a b")
-    ));
+    assert!(evs
+        .iter()
+        .any(|e| matches!(e, Event::Scalar { value, .. } if value == "a b")));
 }
 
 #[test]

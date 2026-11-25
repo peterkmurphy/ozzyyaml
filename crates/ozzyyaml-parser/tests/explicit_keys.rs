@@ -127,7 +127,9 @@ fn explicit_key_empty_value() {
 #[test]
 fn complex_sequence_key() {
     let events = parse_str("? - a\n: b\n").unwrap();
-    assert!(events.iter().any(|e| matches!(e, Event::SequenceStart { .. })));
+    assert!(events
+        .iter()
+        .any(|e| matches!(e, Event::SequenceStart { .. })));
     let scalars: Vec<_> = events
         .into_iter()
         .filter_map(|e| match e {

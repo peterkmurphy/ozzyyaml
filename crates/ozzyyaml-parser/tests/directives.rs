@@ -130,7 +130,8 @@ fn tag_directive_expands_handle() {
 
 #[test]
 fn tag_directive_does_not_carry_across_documents() {
-    let err = parse_str("%TAG !e! tag:example.com,2000:app/\n---\n!e!foo\n---\n!e!bar\n").unwrap_err();
+    let err =
+        parse_str("%TAG !e! tag:example.com,2000:app/\n---\n!e!foo\n---\n!e!bar\n").unwrap_err();
     assert!(
         err.to_string().contains("undeclared") || err.to_string().contains("tag"),
         "{err}"

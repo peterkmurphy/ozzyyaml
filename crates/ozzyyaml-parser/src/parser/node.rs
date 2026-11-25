@@ -6,6 +6,13 @@ use crate::event::{Event, ScalarStyle};
 use crate::mark::Mark;
 use crate::token::Token;
 
+struct NodeProperties {
+    anchor: Option<String>,
+    tag: Option<String>,
+    prop_line: Option<u32>,
+    prop_col: Option<u32>,
+}
+
 impl Parser<'_> {
     pub(super) fn end_collection(&mut self, event: Event) -> Result<Option<Event>> {
         self.state = self.stack.pop().ok_or_else(|| Error::Parse {
@@ -21,9 +28,7 @@ impl Parser<'_> {
 
     /// Parses an optional anchor and tag, in either order.
     /// Returns the line of the last property token (for same-line checks).
-    fn parse_properties(
-        &mut self,
-    ) -> Result<(Option<String>, Option<String>, Option<u32>, Option<u32>)> {
+    fn parse_properties(&mut self) -> Result<NodeProperties> {
         let (mut anchor, mut tag, mut prop_line, mut prop_col) = (None, None, None, None);
         loop {
             match self.peek()? {
@@ -46,7 +51,14 @@ impl Parser<'_> {
                         prop_col = Some(mark.column);
                     }
                 }
-                _ => return Ok((anchor, tag, prop_line, prop_col)),
+                _ => {
+                    return Ok(NodeProperties {
+                        anchor,
+                        tag,
+                        prop_line,
+                        prop_col,
+                    });
+                }
             }
         }
     }
@@ -61,7 +73,12 @@ impl Parser<'_> {
     /// sequence whose `-` entries sit at the parent mapping's indent
     /// (`key:\n- a`), which only a block mapping value may contain.
     pub(super) fn parse_node_in(&mut self, allow_empty: bool, indentless: bool) -> Result<Event> {
-        let (anchor, tag, prop_line, prop_col) = self.parse_properties()?;
+        let NodeProperties {
+            anchor,
+            tag,
+            prop_line,
+            prop_col,
+        } = self.parse_properties()?;
         let has_props = anchor.is_some() || tag.is_some();
         let map_key_col = self.block_mapping_key_column;
         let doc_start_line = self.document_start_line;
@@ -97,8 +114,7 @@ impl Parser<'_> {
             {
                 // `seq:\n&anchor\n- a` — properties at the key indent (G9HC).
                 Err(Error::Parse {
-                    message: "properties for a block sequence must be indented past the key"
-                        .into(),
+                    message: "properties for a block sequence must be indented past the key".into(),
                     mark: *mark,
                 })
             }
@@ -119,8 +135,7 @@ impl Parser<'_> {
                     && map_key_col == prop_col =>
             {
                 Err(Error::Parse {
-                    message: "properties for a block sequence must be indented past the key"
-                        .into(),
+                    message: "properties for a block sequence must be indented past the key".into(),
                     mark: *mark,
                 })
             }
@@ -140,14 +155,11 @@ impl Parser<'_> {
             {
                 // `key: &x\n!!map\n  a: b` — tag at key indent (H7J7).
                 Err(Error::Parse {
-                    message: "properties for a block mapping must be indented past the key"
-                        .into(),
+                    message: "properties for a block mapping must be indented past the key".into(),
                     mark: *mark,
                 })
             }
-            Some(Token::BlockMappingStart { mark })
-                if doc_start_line == Some(mark.line) =>
-            {
+            Some(Token::BlockMappingStart { mark }) if doc_start_line == Some(mark.line) => {
                 // `--- key: value` block mapping on the document-start line
                 // (suites 9KBC, CXX2).
                 Err(Error::Parse {

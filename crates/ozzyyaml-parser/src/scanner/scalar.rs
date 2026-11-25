@@ -275,7 +275,10 @@ impl Scanner<'_> {
                 Some(c) => {
                     if !is_nb_json(c) {
                         return Err(scan_error(
-                            format!("non-JSON character U+{:04X} in double-quoted scalar", c as u32),
+                            format!(
+                                "non-JSON character U+{:04X} in double-quoted scalar",
+                                c as u32
+                            ),
                             self.reader.mark(),
                         ));
                     }
@@ -318,7 +321,7 @@ impl Scanner<'_> {
                 if rest.starts_with("---") || rest.starts_with("...") {
                     let after = rest.get(3..).unwrap_or("");
                     let marker_ok = after.is_empty()
-                        || after.starts_with(|c: char| matches!(c, ' ' | '\t' | '\n' | '\r'));
+                        || after.starts_with([' ', '\t', '\n', '\r']);
                     if marker_ok {
                         return Err(scan_error(
                             "document marker while scanning a quoted scalar".into(),
@@ -392,14 +395,20 @@ impl Scanner<'_> {
             let digit = match self.reader.bump() {
                 Some(c) if is_hex_digit(c) => c.to_digit(16).expect("hex digit"),
                 Some(c) => {
-                    return Err(scan_error(format!("invalid hex digit '{c}' in escape"), mark))
+                    return Err(scan_error(
+                        format!("invalid hex digit '{c}' in escape"),
+                        mark,
+                    ))
                 }
                 None => return Err(scan_error("unterminated hex escape".into(), mark)),
             };
             code = (code << 4) | digit;
         }
         char::from_u32(code).ok_or_else(|| {
-            scan_error(format!("escape is not a valid Unicode scalar value U+{code:X}"), mark)
+            scan_error(
+                format!("escape is not a valid Unicode scalar value U+{code:X}"),
+                mark,
+            )
         })
     }
 }

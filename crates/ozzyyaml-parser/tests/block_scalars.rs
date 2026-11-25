@@ -132,9 +132,13 @@ fn literal_keep_chomp() {
 
 #[test]
 fn folded_joins_lines_with_space() {
-    let (value, style) = scalar_of(">\n  Mark McGwire's\n  year was crippled\n  by a knee injury.\n");
+    let (value, style) =
+        scalar_of(">\n  Mark McGwire's\n  year was crippled\n  by a knee injury.\n");
     assert_eq!(style, ScalarStyle::Folded);
-    assert_eq!(value, "Mark McGwire's year was crippled by a knee injury.\n");
+    assert_eq!(
+        value,
+        "Mark McGwire's year was crippled by a knee injury.\n"
+    );
 }
 
 #[test]

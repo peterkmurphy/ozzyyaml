@@ -93,8 +93,7 @@ impl<'a> Scanner<'a> {
 
     /// A queued token that may still become a key can't be released yet.
     fn need_more_tokens(&self) -> bool {
-        !self.done
-            && (self.queue.is_empty() || self.pending_simple_key_at_front())
+        !self.done && (self.queue.is_empty() || self.pending_simple_key_at_front())
     }
 
     /// True if the next token to yield is still a candidate simple key
@@ -112,9 +111,7 @@ impl<'a> Scanner<'a> {
         // parent indent before they close (suite 9C9N).
         if self.flow_level > 0 {
             let parent = self.indents.last().copied().unwrap_or(0);
-            if mark.column <= parent
-                && !matches!(self.reader.peek(), Some(']' | '}') | None)
-            {
+            if mark.column <= parent && !matches!(self.reader.peek(), Some(']' | '}') | None) {
                 return Err(scan_error(
                     "wrong indentation while scanning a flow collection".into(),
                     mark,
@@ -158,10 +155,7 @@ impl<'a> Scanner<'a> {
         }
         match c {
             '\u{FEFF}' => {
-                return Err(scan_error(
-                    "byte order mark inside document".into(),
-                    mark,
-                ));
+                return Err(scan_error("byte order mark inside document".into(), mark));
             }
             '%' if mark.column == 1 && self.flow_level == 0 => self.fetch_directive(mark),
             '!' => self.fetch_tag(mark)?,

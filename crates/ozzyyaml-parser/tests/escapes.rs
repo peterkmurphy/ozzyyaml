@@ -45,7 +45,10 @@ fn bell_and_nbsp_letter_escapes() {
 
 #[test]
 fn remaining_letter_escapes() {
-    assert_eq!(one_string("\"\\a\\v\\f\\e\\N\\L\\P\"\n"), "\u{7}\u{b}\u{c}\u{1b}\u{85}\u{2028}\u{2029}");
+    assert_eq!(
+        one_string("\"\\a\\v\\f\\e\\N\\L\\P\"\n"),
+        "\u{7}\u{b}\u{c}\u{1b}\u{85}\u{2028}\u{2029}"
+    );
 }
 
 fn suite_root() -> PathBuf {

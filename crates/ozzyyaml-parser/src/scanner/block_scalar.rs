@@ -29,11 +29,7 @@ impl Scanner<'_> {
         let (chomping, increment) = self.scan_block_scalar_header(start)?;
 
         // Parent indent in libyaml's 0-based column space.
-        let parent: i32 = self
-            .indents
-            .last()
-            .map(|&c| c as i32 - 1)
-            .unwrap_or(-1);
+        let parent: i32 = self.indents.last().map(|&c| c as i32 - 1).unwrap_or(-1);
 
         let mut indent: u32 = if increment > 0 {
             if parent >= 0 {
@@ -62,11 +58,7 @@ impl Scanner<'_> {
             // More-indented / blank-leading lines affect folded joining.
             let trailing_blank = matches!(self.reader.peek(), Some(' ' | '\t'));
 
-            if !literal
-                && leading_break == "\n"
-                && !leading_blank
-                && !trailing_blank
-            {
+            if !literal && leading_break == "\n" && !leading_blank && !trailing_blank {
                 // Fold: a single `\n` between non-blank lines becomes a space.
                 if trailing_breaks.is_empty() {
                     value.push(' ');
@@ -200,11 +192,7 @@ impl Scanner<'_> {
         indent: &mut u32,
         breaks: &mut String,
     ) -> Result<()> {
-        let parent: i32 = self
-            .indents
-            .last()
-            .map(|&c| c as i32 - 1)
-            .unwrap_or(-1);
+        let parent: i32 = self.indents.last().map(|&c| c as i32 - 1).unwrap_or(-1);
 
         let mut max_indent = 0u32;
 
@@ -253,10 +241,7 @@ impl Scanner<'_> {
             let first_line_indent = self.reader.mark().column.saturating_sub(1);
             // First non-empty line determines indent. Leading empty lines must
             // not contain more spaces than that line (suite S98Z).
-            if self.reader.peek().is_some()
-                && first_line_indent < max_indent
-                && max_indent > min
-            {
+            if self.reader.peek().is_some() && first_line_indent < max_indent && max_indent > min {
                 return Err(scan_error(
                     "leading empty lines contain more spaces than the first content line".into(),
                     start,
