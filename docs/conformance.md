@@ -26,6 +26,10 @@ round-trip emit, with the caveats below.
   (255 / 255) match exactly, enforced by the hard gate
   `all_valid_event_suite_cases_match` in
   `crates/ozzyyaml-parser/tests/yaml_test_suite.rs`.
+- **yaml-test-suite invalid:** **100%** of cases with an `error` marker
+  (78 / 78) are rejected by `parse_str`, enforced by
+  `all_error_suite_cases_reject` in
+  `crates/ozzyyaml-parser/tests/yaml_test_suite_errors.rs`.
 - **yaml-test-suite compose:** **100%** of the same valid cases (255 / 255)
   compose successfully via Rust `load_all` and Python `load_all` /
   `load_all_value`, enforced by `all_valid_cases_compose_ok` in
@@ -39,11 +43,13 @@ round-trip emit, with the caveats below.
 - **Core only:** `yes` / `no` stay strings; no YAML 1.1 merge keys.
 
 Design tracks:
+[0.2.0 pre-release](superpowers/specs/2026-11-26-ozzyyaml-0.2.0-prerelease-design.md),
 [grammar complete](superpowers/specs/2026-11-25-ozzyyaml-grammar-complete-design.md),
 [Python + compose suite](superpowers/specs/2026-11-25-ozzyyaml-python-compose-suite-design.md),
 [conformance](superpowers/specs/2026-11-24-ozzyyaml-conformance-design.md),
 [Chapter 5 chars](superpowers/specs/2026-11-25-ozzyyaml-chapter5-chars-design.md).  
 Plans:
+[0.2.0 pre-release](superpowers/plans/2026-11-26-ozzyyaml-0.2.0-prerelease.md),
 [grammar complete](superpowers/plans/2026-11-25-ozzyyaml-grammar-complete.md),
 [Python + compose suite](superpowers/plans/2026-11-25-ozzyyaml-python-compose-suite.md),
 [conformance](superpowers/plans/2026-11-24-ozzyyaml-conformance.md),

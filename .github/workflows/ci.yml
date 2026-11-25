@@ -16,6 +16,11 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace -- -D warnings
       - run: cargo test --workspace
+      - name: Conformance summary
+        run: |
+          cargo test -p ozzyyaml-parser --test yaml_test_suite -- --nocapture
+          cargo test -p ozzyyaml-parser --test yaml_test_suite_errors -- --nocapture
+          echo "Conformance: 255/255 valid events + 78/78 invalid rejections (see docs/conformance.md)"
 
   python:
     runs-on: ubuntu-latest

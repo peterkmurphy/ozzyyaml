@@ -96,8 +96,9 @@ around aliases and cycles. CI builds and smoke-tests wheels for Linux, macOS
 5. Structured Python `Value` API — done
 6. crates.io + PyPI `0.1.0` — done
 7. Trusted publishing (OIDC) — done
-8. YAML 1.2.2 conformance track — done ([status](docs/conformance.md))
-9. Optional later work: remaining suite edge cases, Serde, PyYAML-compat quirks
+8. YAML 1.2.2 conformance — done: **255/255** valid events + **78/78** invalid
+   rejections ([status](docs/conformance.md))
+9. Optional later: Serde, PyYAML-compat quirks, emit presentation fidelity
 
 ## Learn more
 
