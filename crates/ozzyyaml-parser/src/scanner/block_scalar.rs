@@ -245,12 +245,24 @@ impl Scanner<'_> {
         }
 
         if *indent == 0 {
-            let mut determined = max_indent;
             let min = if parent >= 0 {
                 (parent as u32).saturating_add(1)
             } else {
                 0
             };
+            let first_line_indent = self.reader.mark().column.saturating_sub(1);
+            // First non-empty line determines indent. Leading empty lines must
+            // not contain more spaces than that line (suite S98Z).
+            if self.reader.peek().is_some()
+                && first_line_indent < max_indent
+                && max_indent > min
+            {
+                return Err(scan_error(
+                    "leading empty lines contain more spaces than the first content line".into(),
+                    start,
+                ));
+            }
+            let mut determined = max_indent;
             if determined < min {
                 determined = min;
             }

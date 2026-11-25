@@ -16,6 +16,9 @@ impl Parser<'_> {
             self.bump();
         }
         self.tag_directives.clear();
+        self.block_mapping_key_line = None;
+        self.block_mapping_key_column = None;
+        self.document_start_line = None;
         let mut seen_yaml = false;
         let mut seen_directive = false;
         while let Some(Token::Directive { .. }) = self.peek()? {
@@ -25,7 +28,8 @@ impl Parser<'_> {
             }
         }
         match self.peek()? {
-            Some(Token::DocumentStart { .. }) => {
+            Some(Token::DocumentStart { mark }) => {
+                self.document_start_line = Some(mark.line);
                 self.bump();
                 self.state = State::DocumentContent;
                 Ok(Some(Event::DocumentStart { explicit: true }))

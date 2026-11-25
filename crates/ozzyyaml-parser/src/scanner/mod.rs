@@ -108,6 +108,19 @@ impl<'a> Scanner<'a> {
     fn fetch_next_token(&mut self) -> Result<()> {
         self.skip_whitespace_and_comments()?;
         let mark = self.reader.mark();
+        // Flow collections nested in block context may not dedent to the
+        // parent indent before they close (suite 9C9N).
+        if self.flow_level > 0 {
+            let parent = self.indents.last().copied().unwrap_or(0);
+            if mark.column <= parent
+                && !matches!(self.reader.peek(), Some(']' | '}') | None)
+            {
+                return Err(scan_error(
+                    "wrong indentation while scanning a flow collection".into(),
+                    mark,
+                ));
+            }
+        }
         self.after_json_node = std::mem::take(&mut self.json_node_pending);
         if self.possible_key.is_some_and(|k| k.mark.line != mark.line) {
             self.possible_key = None;

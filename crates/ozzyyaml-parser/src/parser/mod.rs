@@ -61,6 +61,10 @@ pub struct Parser<'a> {
     pending_mark: Option<Mark>,
     /// Line of the current block-mapping `Key` token (for same-line checks).
     block_mapping_key_line: Option<u32>,
+    /// Column of the current block-mapping `Key` token.
+    block_mapping_key_column: Option<u32>,
+    /// Line of the current document's `---` marker, if explicit.
+    document_start_line: Option<u32>,
 }
 
 impl<'a> Parser<'a> {
@@ -82,6 +86,8 @@ impl<'a> Parser<'a> {
             last_mark: Mark::default(),
             pending_mark: None,
             block_mapping_key_line: None,
+            block_mapping_key_column: None,
+            document_start_line: None,
         })
     }
 
@@ -158,8 +164,10 @@ impl<'a> Parser<'a> {
             State::BlockMappingKey => match self.peek()? {
                 Some(Token::Key { mark }) => {
                     let key_line = mark.line;
+                    let key_col = mark.column;
                     self.bump();
                     self.block_mapping_key_line = Some(key_line);
+                    self.block_mapping_key_column = Some(key_col);
                     self.state = State::BlockMappingValue;
                     // Explicit `?` keys may contain a zero-indent sequence at the
                     // mapping's own indent (libyaml `parse_node(block=1, indentless=1)`).
@@ -168,6 +176,7 @@ impl<'a> Parser<'a> {
                 Some(Token::Value { .. }) => {
                     // Empty key: `: value` or lone `:` after a prior entry.
                     self.block_mapping_key_line = None;
+                    self.block_mapping_key_column = None;
                     self.state = State::BlockMappingValue;
                     Ok(Some(empty_scalar(None, None)))
                 }

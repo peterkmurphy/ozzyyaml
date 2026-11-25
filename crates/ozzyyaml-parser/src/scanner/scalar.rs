@@ -308,6 +308,7 @@ impl Scanner<'_> {
         }
 
         let mut empty_lines = 0u32;
+        let parent_indent = self.indents.last().copied().unwrap_or(0);
         loop {
             self.skip_inline_white();
             let col = self.reader.mark().column;
@@ -333,6 +334,14 @@ impl Scanner<'_> {
                 }
                 None => return Err(unterminated("quoted", self.reader.mark())),
                 Some(_) => {
+                    // In block context, continuation lines of a quoted scalar
+                    // must be indented past the parent (suite QB6E).
+                    if self.flow_level == 0 && col <= parent_indent {
+                        return Err(scan_error(
+                            "wrong indentation while scanning a quoted scalar".into(),
+                            self.reader.mark(),
+                        ));
+                    }
                     if empty_lines > 0 {
                         for _ in 0..empty_lines {
                             value.push('\n');
