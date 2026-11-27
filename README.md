@@ -5,7 +5,8 @@
 ozzyyaml is a from-scratch **YAML 1.2.2** stack, written in Rust first, with
 Python bindings. It is licensed under the BSD-3-Clause. See
 [docs/conformance.md](docs/conformance.md) for suite coverage and caveats
-(Limits, emit presentation, remaining edge cases).
+(Limits, emit presentation, remaining edge cases), and
+[CHANGELOG.md](CHANGELOG.md) for release notes.
 
 The project exists because common YAML stacks still struggle with parts of the
 1.2.2 spec that matter in real documents. In particular, **libyaml** (and
@@ -105,6 +106,7 @@ macOS (arm64 + x86_64), and Windows; CI also smoke-tests free-threaded
 
 ## Learn more
 
+- [Changelog](CHANGELOG.md) — user-facing release notes
 - [Architecture overview](docs/architecture.md) — how the pipeline fits together
 - [Conformance status](docs/conformance.md) — suite coverage and gaps
 - [Python guide](docs/python.md) — install and API notes
