@@ -28,7 +28,41 @@ pub enum Value {
 /// Borrowed mapping entries.
 pub type MappingEntries<'a> = std::cell::Ref<'a, Vec<(Rc<Value>, Rc<Value>)>>;
 
+impl Drop for Value {
+    fn drop(&mut self) {
+        let mut stack = Vec::new();
+        Self::drain_children(self, &mut stack);
+        while let Some(mut node) = stack.pop() {
+            Self::drain_children(&mut node, &mut stack);
+            // `node` is now an empty collection or scalar; its Drop is shallow.
+        }
+    }
+}
+
 impl Value {
+    fn drain_children(value: &mut Value, stack: &mut Vec<Value>) {
+        match value {
+            Value::Sequence(cell) => {
+                for child in cell.get_mut().drain(..) {
+                    if let Ok(inner) = Rc::try_unwrap(child) {
+                        stack.push(inner);
+                    }
+                }
+            }
+            Value::Mapping(cell) => {
+                for (k, v) in cell.get_mut().drain(..) {
+                    if let Ok(inner) = Rc::try_unwrap(k) {
+                        stack.push(inner);
+                    }
+                    if let Ok(inner) = Rc::try_unwrap(v) {
+                        stack.push(inner);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// `Some(())` if this value is null.
     pub fn as_null(&self) -> Option<()> {
         match self {
@@ -122,5 +156,26 @@ mod tests {
         }
         let child = Rc::clone(&seq.as_sequence().unwrap()[0]);
         assert!(Rc::ptr_eq(&child, &seq));
+        // Break the cycle so the test itself does not leak.
+        if let Value::Sequence(cell) = &*seq {
+            cell.borrow_mut().clear();
+        }
+    }
+
+    #[test]
+    fn deep_sequence_drops_on_small_stack() {
+        const DEPTH: usize = 100_000;
+        const STACK: usize = 1024 * 1024;
+        let handle = std::thread::Builder::new()
+            .stack_size(STACK)
+            .spawn(|| {
+                let mut node = Value::String("x".into());
+                for _ in 0..DEPTH {
+                    node = Value::Sequence(RefCell::new(vec![Rc::new(node)]));
+                }
+                drop(node);
+            })
+            .expect("spawn");
+        handle.join().expect("deep Drop overflowed or panicked");
     }
 }
