@@ -108,4 +108,8 @@ jobs:
       - name: fuzz_roundtrip (~90s)
         # Value graphs can contain Rc cycles (YAML aliases); LSan reports those
         # as leaks by design. Still catch ASan memory errors.
+        # ASAN_OPTIONS covers process-exit LSan; -detect_leaks=0 covers libFuzzer's
+        # between-input checks. Either alone is flaky on GHA.
+        env:
+          ASAN_OPTIONS: detect_leaks=0
         run: cargo +nightly fuzz run fuzz_roundtrip -- -max_total_time=90 -detect_leaks=0

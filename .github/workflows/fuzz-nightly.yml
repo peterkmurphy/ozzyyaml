@@ -26,6 +26,9 @@ jobs:
         run: cargo install cargo-fuzz --locked
       - name: Run ${{ matrix.target }} (~15 min)
         id: fuzz
+        env:
+          # Exit-time LSan still fires after max_total_time without this; see ci.yml.
+          ASAN_OPTIONS: detect_leaks=0
         run: |
           extra=()
           if [[ "${{ matrix.target }}" == "fuzz_roundtrip" ]]; then
