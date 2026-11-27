@@ -13,5 +13,5 @@ keywords = ["yaml", "compose", "core-schema", "anchors"]
 categories = ["parser-implementations", "encoding", "data-structures"]
 
 [dependencies]
-ozzyyaml-parser = { version = "0.2.1", path = "../ozzyyaml-parser" }
+ozzyyaml-parser = { version = "0.3.0", path = "../ozzyyaml-parser" }
 thiserror = "2"

@@ -7,11 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-27
+
+### Fixed
+
+- Stack-overflow paths in emit (`Writer` / `Anchors::scan`), `Value::Drop`, and
+  the Python converters (`value_to_py` / `py_to_value` / hashable keys) by
+  rewriting those walks as iterative. Deep trees no longer die with SIGSEGV
+  under default stack size once `Limits` accepts them.
+
 ### Changed
 
 - **Breaking (behavioral):** default `max_nesting_depth` raised from **512**
-  back to **10 000**. Compose, emit, `Value::Drop`, and the Python converters
-  are now iterative, so nesting is only a DoS/memory guard again. Callers who
+  back to **10 000**. Nesting is only a DoS/memory guard again. Callers who
   relied on the 0.2.1 cap rejecting depth ≥ 513 will see those documents
   accepted under default `Limits`.
 
@@ -58,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release: event parser, Core compose, emit, and Python bindings.
 
+[0.3.0]: https://github.com/peterkmurphy/ozzyyaml/releases/tag/v0.3.0
 [0.2.1]: https://github.com/peterkmurphy/ozzyyaml/releases/tag/v0.2.1
 [0.2.0]: https://github.com/peterkmurphy/ozzyyaml/releases/tag/v0.2.0
 [0.1.0]: https://github.com/peterkmurphy/ozzyyaml/releases/tag/v0.1.0
