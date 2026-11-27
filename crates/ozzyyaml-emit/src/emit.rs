@@ -437,11 +437,7 @@ impl Writer {
         }
     }
 
-    fn block_enter<'a>(
-        &mut self,
-        node: Node<'a>,
-        stack: &mut Vec<BlockFrame>,
-    ) -> BlockStep<'a> {
+    fn block_enter<'a>(&mut self, node: Node<'a>, stack: &mut Vec<BlockFrame>) -> BlockStep<'a> {
         let value = node.value();
         if scalar(value).is_some() || is_empty_collection(value) {
             return BlockStep::Done(Block::Inline(self.flow_node(Node::Borrowed(value), false)));

@@ -133,10 +133,15 @@ fn emit_deep_flow_seq_on_small_stack() {
         .stack_size(STACK)
         .spawn(|| {
             let input = flow_seq(DEPTH);
-            let value = from_str_with_limits(&input, Limits::default().max_nesting_depth(DEPTH + 1))
-                .expect("compose deep flow-seq");
+            let value =
+                from_str_with_limits(&input, Limits::default().max_nesting_depth(DEPTH + 1))
+                    .expect("compose deep flow-seq");
             let yaml = to_string(&value).expect("emit deep flow-seq");
-            assert!(yaml.starts_with('['), "unexpected emit: {}", &yaml[..yaml.len().min(32)]);
+            assert!(
+                yaml.starts_with('['),
+                "unexpected emit: {}",
+                &yaml[..yaml.len().min(32)]
+            );
             clear_tree(&value);
         })
         .expect("spawn");
