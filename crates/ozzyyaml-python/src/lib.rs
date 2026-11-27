@@ -1,16 +1,17 @@
 //! PyO3 extension module for ozzyyaml (`ozzyyaml._native`).
 
+mod convert;
 mod graph;
 
 use pyo3::create_exception;
 use pyo3::exceptions::{PyException, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyFloat, PyList, PyString, PyTuple};
+use pyo3::types::PyList;
 use std::collections::HashMap;
-use std::rc::Rc;
 
-use ozzyyaml::Value;
 use ozzyyaml_emit::{dump_all_with_options, to_string_with_options, EmitOptions, EmitStyle};
+
+use convert::{py_to_value, value_to_py};
 
 create_exception!(ozzyyaml, OzzyYamlError, PyException);
 
@@ -84,136 +85,6 @@ pub(crate) fn load_docs(
             ozzyyaml::load_all_from_slice_with_limits(&b, limits).map_err(map_err)
         }
     }
-}
-
-fn value_to_py(
-    py: Python<'_>,
-    value: &Value,
-    cache: &mut HashMap<*const Value, Py<PyAny>>,
-) -> PyResult<Py<PyAny>> {
-    let ptr = value as *const Value;
-    if let Some(existing) = cache.get(&ptr) {
-        return Ok(existing.clone_ref(py));
-    }
-
-    match value {
-        Value::Null => {
-            let obj = py.None();
-            cache.insert(ptr, obj.clone_ref(py));
-            Ok(obj)
-        }
-        Value::Bool(b) => {
-            let obj = PyBool::new(py, *b).as_any().clone().unbind();
-            cache.insert(ptr, obj.clone_ref(py));
-            Ok(obj)
-        }
-        Value::Int(i) => {
-            let obj = (*i)
-                .into_pyobject(py)
-                .expect("i64 to Python is infallible")
-                .into_any()
-                .unbind();
-            cache.insert(ptr, obj.clone_ref(py));
-            Ok(obj)
-        }
-        Value::Float(f) => {
-            let obj = PyFloat::new(py, *f).into_any().unbind();
-            cache.insert(ptr, obj.clone_ref(py));
-            Ok(obj)
-        }
-        Value::String(s) => {
-            let obj = PyString::new(py, s).into_any().unbind();
-            cache.insert(ptr, obj.clone_ref(py));
-            Ok(obj)
-        }
-        Value::Sequence(items) => {
-            let list = PyList::empty(py);
-            cache.insert(ptr, list.clone().into_any().unbind());
-            for child in items.borrow().iter() {
-                let obj = value_to_py(py, child.as_ref(), cache)?;
-                list.append(obj)?;
-            }
-            Ok(list.into_any().unbind())
-        }
-        Value::Mapping(entries) => {
-            let dict = PyDict::new(py);
-            cache.insert(ptr, dict.clone().into_any().unbind());
-            for (k, v) in entries.borrow().iter() {
-                let key = value_to_py(py, k.as_ref(), cache)?;
-                let key = mapping_key_to_hashable(py, key)?;
-                let val = value_to_py(py, v.as_ref(), cache)?;
-                dict.set_item(key, val)?;
-            }
-            Ok(dict.into_any().unbind())
-        }
-    }
-}
-
-fn mapping_key_to_hashable(py: Python<'_>, key: Py<PyAny>) -> PyResult<Py<PyAny>> {
-    Ok(hashable_key_item(py, key.bind(py))?.unbind())
-}
-
-fn hashable_key_item<'py>(py: Python<'py>, obj: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    if let Ok(list) = obj.cast::<PyList>() {
-        let mut items = Vec::with_capacity(list.len());
-        for item in list.iter() {
-            items.push(hashable_key_item(py, &item)?);
-        }
-        return Ok(PyTuple::new(py, items)?.into_any());
-    }
-    if let Ok(dict) = obj.cast::<PyDict>() {
-        let mut pairs = Vec::with_capacity(dict.len());
-        for (k, v) in dict.iter() {
-            let tk = hashable_key_item(py, &k)?;
-            let tv = hashable_key_item(py, &v)?;
-            pairs.push(PyTuple::new(py, [tk, tv])?.into_any());
-        }
-        return Ok(PyTuple::new(py, pairs)?.into_any());
-    }
-    Ok(obj.clone())
-}
-
-fn py_to_value(obj: &Bound<'_, PyAny>) -> PyResult<Value> {
-    if obj.is_none() {
-        return Ok(Value::Null);
-    }
-    if let Ok(b) = obj.extract::<bool>() {
-        return Ok(Value::Bool(b));
-    }
-    if let Ok(i) = obj.extract::<i64>() {
-        return Ok(Value::Int(i));
-    }
-    if let Ok(f) = obj.extract::<f64>() {
-        return Ok(Value::Float(f));
-    }
-    if let Ok(s) = obj.extract::<String>() {
-        return Ok(Value::String(s));
-    }
-    if let Ok(list) = obj.cast::<PyList>() {
-        let mut items = Vec::with_capacity(list.len());
-        for item in list.iter() {
-            items.push(Rc::new(py_to_value(&item)?));
-        }
-        return Ok(Value::Sequence(std::cell::RefCell::new(items)));
-    }
-    if let Ok(tup) = obj.cast::<PyTuple>() {
-        let mut items = Vec::with_capacity(tup.len());
-        for item in tup.iter() {
-            items.push(Rc::new(py_to_value(&item)?));
-        }
-        return Ok(Value::Sequence(std::cell::RefCell::new(items)));
-    }
-    if let Ok(dict) = obj.cast::<PyDict>() {
-        let mut entries = Vec::with_capacity(dict.len());
-        for (k, v) in dict.iter() {
-            entries.push((Rc::new(py_to_value(&k)?), Rc::new(py_to_value(&v)?)));
-        }
-        return Ok(Value::Mapping(std::cell::RefCell::new(entries)));
-    }
-    Err(PyTypeError::new_err(format!(
-        "cannot dump Python type {}",
-        obj.get_type().name()?
-    )))
 }
 
 #[pyfunction]
