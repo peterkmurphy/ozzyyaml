@@ -39,8 +39,10 @@ fn is_yaml_non_printable(c: char) -> bool {
 }
 
 fn is_special_char(c: char) -> bool {
-    // Non-printables and NBSP/BOM/line separators that plain/single cannot carry.
-    is_yaml_non_printable(c)
+    // Controls (incl. `\n`/`\t`) need double-quoted escapes so roundtrip does
+    // not fold; YAML non-printables (e.g. U+FFFF) are not always `is_control`.
+    c.is_control()
+        || is_yaml_non_printable(c)
         || matches!(
             c,
             '\u{85}' | '\u{a0}' | '\u{feff}' | '\u{2028}' | '\u{2029}'
