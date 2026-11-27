@@ -30,9 +30,22 @@ pub(crate) fn format_string(s: &str) -> String {
     }
 }
 
+/// YAML 1.2 §5.1 printable characters — everything else needs double-quoted escapes.
+fn is_yaml_non_printable(c: char) -> bool {
+    match c as u32 {
+        0x9 | 0xa | 0xd => false,
+        0x20..=0x7e => false,
+        0x85 => false,
+        0xa0..=0xd7ff => false,
+        0xe000..=0xfffd => false,
+        0x10000..=0x10ffff => false,
+        _ => true,
+    }
+}
+
 fn is_special_char(c: char) -> bool {
-    // Characters that must (or should) use double-quoted escapes.
-    c.is_control()
+    // Non-printables and NBSP/BOM/line separators that plain/single cannot carry.
+    is_yaml_non_printable(c)
         || matches!(
             c,
             '\u{85}' | '\u{a0}' | '\u{feff}' | '\u{2028}' | '\u{2029}'
@@ -118,5 +131,15 @@ mod tests {
     #[test]
     fn emits_hex_for_other_controls() {
         assert_eq!(double_quoted("\u{1}"), "\"\\x01\"");
+    }
+
+    #[test]
+    fn noncharacter_ffff_uses_double_quotes() {
+        // U+FFFF is YAML-non-printable (§5.1) but not Rust `char::is_control`.
+        assert!(needs_double_quotes("\u{ffff}"));
+        assert_eq!(format_string("\u{ffff}"), "\"\\uffff\"");
+        let yaml = format_string("x\u{ffff}y");
+        let value = ozzyyaml::from_str(&format!("{yaml}\n")).expect("reparse");
+        assert_eq!(value, Value::String("x\u{ffff}y".into()));
     }
 }
