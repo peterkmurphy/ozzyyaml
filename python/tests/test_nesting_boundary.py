@@ -4,10 +4,7 @@ import threading
 
 import ozzyyaml
 
-DEFAULT_DEPTH = 512
-# Target depth after iterative Python converters (Task 5); default limit stays 512
-# until Task 6 re-raises Limits::default().
-RAISED_DEPTH = 10_000
+DEFAULT_DEPTH = 10_000
 SMALL_STACK = 1024 * 1024
 
 
@@ -90,14 +87,11 @@ def _on_small_stack(fn):
         raise errors[0]
 
 
-def test_load_at_raised_depth_on_small_stack():
-    """value_to_py must not recurse with depth (compose is already iterative)."""
-
+def test_load_at_default_depth_on_small_stack():
     def body():
-        text = flow_seq(RAISED_DEPTH)
-        data = ozzyyaml.load(text, max_nesting_depth=RAISED_DEPTH + 1)
+        data = ozzyyaml.load(flow_seq(DEFAULT_DEPTH))
         cur = data
-        for _ in range(RAISED_DEPTH - 1):
+        for _ in range(DEFAULT_DEPTH - 1):
             assert isinstance(cur, list) and len(cur) == 1
             cur = cur[0]
         assert cur == []
@@ -105,16 +99,14 @@ def test_load_at_raised_depth_on_small_stack():
     _on_small_stack(body)
 
 
-def test_dump_python_list_at_raised_depth_on_small_stack():
-    """py_to_value must not recurse with depth."""
-
+def test_dump_python_list_at_default_depth_on_small_stack():
     def body():
-        data = nested_python_list(RAISED_DEPTH)
+        data = nested_python_list(DEFAULT_DEPTH)
         text = ozzyyaml.dump(data)
         assert text.startswith("[")
-        loaded = ozzyyaml.load(text, max_nesting_depth=RAISED_DEPTH + 1)
+        loaded = ozzyyaml.load(text)
         cur = loaded
-        for _ in range(RAISED_DEPTH - 1):
+        for _ in range(DEFAULT_DEPTH - 1):
             assert isinstance(cur, list) and len(cur) == 1
             cur = cur[0]
         assert cur == [None]
@@ -122,12 +114,11 @@ def test_dump_python_list_at_raised_depth_on_small_stack():
     _on_small_stack(body)
 
 
-def test_load_flow_map_at_raised_depth_on_small_stack():
+def test_load_flow_map_at_default_depth_on_small_stack():
     def body():
-        text = flow_map(RAISED_DEPTH)
-        data = ozzyyaml.load(text, max_nesting_depth=RAISED_DEPTH + 1)
+        data = ozzyyaml.load(flow_map(DEFAULT_DEPTH))
         cur = data
-        for _ in range(RAISED_DEPTH):
+        for _ in range(DEFAULT_DEPTH):
             assert isinstance(cur, dict) and list(cur.keys()) == ["a"]
             cur = cur["a"]
         assert cur == 1

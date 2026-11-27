@@ -74,7 +74,7 @@ Supported dump styles are `"flow"` (default) and `"block"`.
 Optional limit keyword arguments on `load` / `load_all` (and the Value
 variants below) map to the Rust `Limits` fields: `max_anchors`,
 `max_nesting_depth`, and `max_input_bytes`. Defaults match Rust (256 MiB
-input, 512 nesting, 100 000 anchors).
+input, 10 000 nesting, 100 000 anchors).
 
 ### Native types
 
