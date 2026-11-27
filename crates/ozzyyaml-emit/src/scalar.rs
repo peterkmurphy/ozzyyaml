@@ -30,9 +30,19 @@ pub(crate) fn format_string(s: &str) -> String {
     }
 }
 
+/// YAML 1.2 §5.1 printable characters — everything else needs double-quoted escapes.
+fn is_yaml_non_printable(c: char) -> bool {
+    !matches!(
+        c as u32,
+        0x9 | 0xa | 0xd | 0x20..=0x7e | 0x85 | 0xa0..=0xd7ff | 0xe000..=0xfffd | 0x10000..=0x10ffff
+    )
+}
+
 fn is_special_char(c: char) -> bool {
-    // Characters that must (or should) use double-quoted escapes.
+    // Controls (incl. `\n`/`\t`) need double-quoted escapes so roundtrip does
+    // not fold; YAML non-printables (e.g. U+FFFF) are not always `is_control`.
     c.is_control()
+        || is_yaml_non_printable(c)
         || matches!(
             c,
             '\u{85}' | '\u{a0}' | '\u{feff}' | '\u{2028}' | '\u{2029}'
@@ -40,7 +50,14 @@ fn is_special_char(c: char) -> bool {
 }
 
 fn needs_double_quotes(s: &str) -> bool {
-    s.chars().any(is_special_char)
+    s.chars().any(is_special_char) || has_document_marker_line(s)
+}
+
+/// A line that begins with `---` / `...` cannot appear inside a multiline
+/// single-quoted scalar — the scanner treats it as a document marker.
+fn has_document_marker_line(s: &str) -> bool {
+    s.split('\n')
+        .any(|line| line.starts_with("---") || line.starts_with("..."))
 }
 
 fn needs_single_quotes(s: &str) -> bool {
@@ -118,5 +135,24 @@ mod tests {
     #[test]
     fn emits_hex_for_other_controls() {
         assert_eq!(double_quoted("\u{1}"), "\"\\x01\"");
+    }
+
+    #[test]
+    fn noncharacter_ffff_uses_double_quotes() {
+        // U+FFFF is YAML-non-printable (§5.1) but not Rust `char::is_control`.
+        assert!(needs_double_quotes("\u{ffff}"));
+        assert_eq!(format_string("\u{ffff}"), "\"\\uffff\"");
+        let yaml = format_string("x\u{ffff}y");
+        let value = ozzyyaml::from_str(&format!("{yaml}\n")).expect("reparse");
+        assert_eq!(value, Value::String("x\u{ffff}y".into()));
+    }
+
+    #[test]
+    fn embedded_document_marker_line_uses_double_quotes() {
+        let s = "1\n\n- b\n--- b";
+        assert!(needs_double_quotes(s));
+        let yaml = format!("{}\n", format_string(s));
+        let value = ozzyyaml::from_str(&yaml).expect("reparse");
+        assert_eq!(value, Value::String(s.into()));
     }
 }

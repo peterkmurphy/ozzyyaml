@@ -2,6 +2,7 @@
 
 use ozzyyaml::Value;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 type Ident = *const Value;
 
@@ -52,7 +53,19 @@ impl Anchors {
     }
 }
 
-fn count(value: &Value, counts: &mut HashMap<Ident, usize>) {
+fn count(root: &Value, counts: &mut HashMap<Ident, usize>) {
+    let mut stack: Vec<Rc<Value>> = Vec::new();
+    bump_and_push_children(root, counts, &mut stack);
+    while let Some(node) = stack.pop() {
+        bump_and_push_children(&node, counts, &mut stack);
+    }
+}
+
+fn bump_and_push_children(
+    value: &Value,
+    counts: &mut HashMap<Ident, usize>,
+    stack: &mut Vec<Rc<Value>>,
+) {
     let seen = counts.entry(value).or_insert(0);
     *seen += 1;
     if *seen > 1 {
@@ -60,14 +73,14 @@ fn count(value: &Value, counts: &mut HashMap<Ident, usize>) {
     }
     match value {
         Value::Sequence(items) => {
-            for item in items.borrow().iter() {
-                count(item, counts);
+            for item in items.borrow().iter().rev() {
+                stack.push(Rc::clone(item));
             }
         }
         Value::Mapping(entries) => {
-            for (k, v) in entries.borrow().iter() {
-                count(k, counts);
-                count(v, counts);
+            for (k, v) in entries.borrow().iter().rev() {
+                stack.push(Rc::clone(v));
+                stack.push(Rc::clone(k));
             }
         }
         _ => {}

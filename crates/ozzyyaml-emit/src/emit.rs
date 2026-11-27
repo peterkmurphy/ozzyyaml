@@ -1,4 +1,4 @@
-//! Recursive `Value` writer (flow and block styles) with `Rc`-identity anchors.
+//! Iterative `Value` writer (flow and block styles) with `Rc`-identity anchors.
 
 use crate::anchors::{Anchors, Visit};
 use crate::error::Result;
@@ -122,72 +122,369 @@ fn alias(name: &str) -> String {
     format!("*{name}")
 }
 
+/// A node to emit: either the borrowed root or an owned `Rc` child.
+enum Node<'a> {
+    Borrowed(&'a Value),
+    Owned(Rc<Value>),
+}
+
+impl Node<'_> {
+    fn value(&self) -> &Value {
+        match self {
+            Node::Borrowed(v) => v,
+            Node::Owned(rc) => rc.as_ref(),
+        }
+    }
+}
+
+enum FlowFrame {
+    Seq {
+        prefix: String,
+        rest: Vec<Rc<Value>>,
+        parts: Vec<String>,
+        as_key: bool,
+    },
+    /// Waiting for the mapping key string; `waiting_value` is emitted next.
+    MapKey {
+        prefix: String,
+        rest: Vec<(Rc<Value>, Rc<Value>)>,
+        parts: Vec<String>,
+        waiting_value: Rc<Value>,
+        as_key: bool,
+    },
+    /// Waiting for the mapping value string after `pending_key`.
+    MapValue {
+        prefix: String,
+        rest: Vec<(Rc<Value>, Rc<Value>)>,
+        parts: Vec<String>,
+        pending_key: String,
+        as_key: bool,
+    },
+}
+
+enum BlockFrame {
+    Seq {
+        props: Option<String>,
+        rest: Vec<Rc<Value>>,
+        lines: Vec<String>,
+    },
+    MapKey {
+        props: Option<String>,
+        rest: Vec<(Rc<Value>, Rc<Value>)>,
+        lines: Vec<String>,
+        waiting_value: Rc<Value>,
+    },
+    MapValue {
+        props: Option<String>,
+        rest: Vec<(Rc<Value>, Rc<Value>)>,
+        lines: Vec<String>,
+        pending_key: String,
+    },
+}
+
+enum FlowStep<'a> {
+    Done(String),
+    Continue(Node<'a>, bool),
+}
+
+enum BlockStep<'a> {
+    Done(Block),
+    Continue(Node<'a>),
+}
+
 impl Writer {
     fn flow(&mut self, value: &Value) -> String {
-        let prefix = match self.anchors.visit(value) {
-            Visit::Alias(name) => return alias(&name),
-            Visit::Anchor(name) => format!("{} ", anchor_decl(&name)),
-            Visit::Plain => String::new(),
-        };
-        let body = match value {
-            Value::Sequence(items) => {
-                let parts: Vec<_> = items.borrow().iter().map(|item| self.flow(item)).collect();
-                format!("[{}]", parts.join(", "))
-            }
-            Value::Mapping(entries) => {
-                let parts: Vec<_> = entries
-                    .borrow()
-                    .iter()
-                    .map(|(k, v)| format!("{}: {}", self.key(k), self.flow(v)))
-                    .collect();
-                format!("{{{}}}", parts.join(", "))
-            }
-            other => scalar(other).expect("collections handled above"),
-        };
-        format!("{prefix}{body}")
+        self.flow_node(Node::Borrowed(value), false)
     }
 
-    /// Mapping key text (flow form). A trailing space after an alias keeps
-    /// the `:` from being read as part of the alias name.
-    fn key(&mut self, key: &Value) -> String {
-        let text = self.flow(key);
-        if text.starts_with('*') {
+    fn maybe_key_space(text: String, as_key: bool) -> String {
+        if as_key && text.starts_with('*') {
             format!("{text} ")
         } else {
             text
         }
     }
 
+    fn flow_node(&mut self, root: Node<'_>, root_as_key: bool) -> String {
+        let mut stack: Vec<FlowFrame> = Vec::new();
+        let mut current = Some((root, root_as_key));
+        let mut finished: Option<String> = None;
+
+        loop {
+            if let Some((node, as_key)) = current.take() {
+                match self.flow_enter(node, as_key, &mut stack) {
+                    FlowStep::Done(s) => finished = Some(s),
+                    FlowStep::Continue(next, next_as_key) => {
+                        current = Some((next, next_as_key));
+                    }
+                }
+                continue;
+            }
+
+            let part = finished.take().expect("flow machine invariant");
+            let Some(frame) = stack.pop() else {
+                return part;
+            };
+            match frame {
+                FlowFrame::Seq {
+                    prefix,
+                    mut rest,
+                    mut parts,
+                    as_key,
+                } => {
+                    parts.push(part);
+                    if let Some(next) = rest.pop() {
+                        stack.push(FlowFrame::Seq {
+                            prefix,
+                            rest,
+                            parts,
+                            as_key,
+                        });
+                        current = Some((Node::Owned(next), false));
+                    } else {
+                        finished = Some(Self::maybe_key_space(
+                            format!("{prefix}[{}]", parts.join(", ")),
+                            as_key,
+                        ));
+                    }
+                }
+                FlowFrame::MapKey {
+                    prefix,
+                    rest,
+                    parts,
+                    waiting_value,
+                    as_key,
+                } => {
+                    stack.push(FlowFrame::MapValue {
+                        prefix,
+                        rest,
+                        parts,
+                        pending_key: part,
+                        as_key,
+                    });
+                    current = Some((Node::Owned(waiting_value), false));
+                }
+                FlowFrame::MapValue {
+                    prefix,
+                    mut rest,
+                    mut parts,
+                    pending_key,
+                    as_key,
+                } => {
+                    parts.push(format!("{pending_key}: {part}"));
+                    if let Some((k, v)) = rest.pop() {
+                        stack.push(FlowFrame::MapKey {
+                            prefix,
+                            rest,
+                            parts,
+                            waiting_value: v,
+                            as_key,
+                        });
+                        current = Some((Node::Owned(k), true));
+                    } else {
+                        finished = Some(Self::maybe_key_space(
+                            format!("{prefix}{{{}}}", parts.join(", ")),
+                            as_key,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    fn flow_enter<'a>(
+        &mut self,
+        node: Node<'a>,
+        as_key: bool,
+        stack: &mut Vec<FlowFrame>,
+    ) -> FlowStep<'a> {
+        let value = node.value();
+        let prefix = match self.anchors.visit(value) {
+            Visit::Alias(name) => {
+                return FlowStep::Done(Self::maybe_key_space(alias(&name), as_key));
+            }
+            Visit::Anchor(name) => format!("{} ", anchor_decl(&name)),
+            Visit::Plain => String::new(),
+        };
+        match value {
+            Value::Sequence(items) => {
+                let mut rest: Vec<Rc<Value>> = items.borrow().iter().cloned().collect();
+                if rest.is_empty() {
+                    return FlowStep::Done(Self::maybe_key_space(format!("{prefix}[]"), as_key));
+                }
+                rest.reverse();
+                let first = rest.pop().expect("non-empty");
+                stack.push(FlowFrame::Seq {
+                    prefix,
+                    rest,
+                    parts: Vec::new(),
+                    as_key,
+                });
+                FlowStep::Continue(Node::Owned(first), false)
+            }
+            Value::Mapping(entries) => {
+                let mut rest: Vec<(Rc<Value>, Rc<Value>)> =
+                    entries.borrow().iter().cloned().collect();
+                if rest.is_empty() {
+                    return FlowStep::Done(Self::maybe_key_space(format!("{prefix}{{}}"), as_key));
+                }
+                rest.reverse();
+                let (k, v) = rest.pop().expect("non-empty");
+                stack.push(FlowFrame::MapKey {
+                    prefix,
+                    rest,
+                    parts: Vec::new(),
+                    waiting_value: v,
+                    as_key,
+                });
+                FlowStep::Continue(Node::Owned(k), true)
+            }
+            other => {
+                let body = scalar(other).expect("collections handled above");
+                FlowStep::Done(Self::maybe_key_space(format!("{prefix}{body}"), as_key))
+            }
+        }
+    }
+
     fn block(&mut self, value: &Value) -> Block {
+        self.block_node(Node::Borrowed(value))
+    }
+
+    fn block_node(&mut self, root: Node<'_>) -> Block {
+        let mut stack: Vec<BlockFrame> = Vec::new();
+        let mut current = Some(root);
+        let mut finished: Option<Block> = None;
+
+        loop {
+            if let Some(node) = current.take() {
+                match self.block_enter(node, &mut stack) {
+                    BlockStep::Done(b) => finished = Some(b),
+                    BlockStep::Continue(next) => current = Some(next),
+                }
+                continue;
+            }
+
+            let part = finished.take().expect("block machine invariant");
+            let Some(frame) = stack.pop() else {
+                return part;
+            };
+            match frame {
+                BlockFrame::Seq {
+                    props,
+                    mut rest,
+                    mut lines,
+                } => {
+                    Self::push_item_lines(&mut lines, part);
+                    if let Some(next) = rest.pop() {
+                        stack.push(BlockFrame::Seq { props, rest, lines });
+                        current = Some(Node::Owned(next));
+                    } else {
+                        finished = Some(Block::Lines { props, lines });
+                    }
+                }
+                BlockFrame::MapKey {
+                    props,
+                    rest,
+                    lines,
+                    waiting_value,
+                } => {
+                    // Keys are always flow-rendered; `part` must be Inline.
+                    let key = match part {
+                        Block::Inline(text) => text,
+                        Block::Lines { .. } => {
+                            unreachable!("mapping keys are scalars/aliases/empty")
+                        }
+                    };
+                    stack.push(BlockFrame::MapValue {
+                        props,
+                        rest,
+                        lines,
+                        pending_key: key,
+                    });
+                    current = Some(Node::Owned(waiting_value));
+                }
+                BlockFrame::MapValue {
+                    props,
+                    mut rest,
+                    mut lines,
+                    pending_key,
+                } => {
+                    Self::push_entry_lines(&mut lines, &pending_key, part);
+                    if let Some((k, v)) = rest.pop() {
+                        stack.push(BlockFrame::MapKey {
+                            props,
+                            rest,
+                            lines,
+                            waiting_value: v,
+                        });
+                        // Key path uses flow via block_enter on scalars; for
+                        // complex keys, block_enter still flow-wraps scalars /
+                        // empty, and visits collections as block — keys that
+                        // are collections go through block. Original used
+                        // `self.key(k)` (flow). Preserve that: emit key via flow.
+                        finished = Some(Block::Inline(self.flow_node(Node::Owned(k), true)));
+                    } else {
+                        finished = Some(Block::Lines { props, lines });
+                    }
+                }
+            }
+        }
+    }
+
+    fn block_enter<'a>(&mut self, node: Node<'a>, stack: &mut Vec<BlockFrame>) -> BlockStep<'a> {
+        let value = node.value();
         if scalar(value).is_some() || is_empty_collection(value) {
-            return Block::Inline(self.flow(value));
+            return BlockStep::Done(Block::Inline(self.flow_node(Node::Borrowed(value), false)));
         }
         let props = match self.anchors.visit(value) {
-            Visit::Alias(name) => return Block::Inline(alias(&name)),
+            Visit::Alias(name) => return BlockStep::Done(Block::Inline(alias(&name))),
             Visit::Anchor(name) => Some(anchor_decl(&name)),
             Visit::Plain => None,
         };
-        let mut lines = Vec::new();
         match value {
             Value::Sequence(items) => {
-                for item in items.borrow().iter() {
-                    self.push_item(&mut lines, item);
+                let mut rest: Vec<Rc<Value>> = items.borrow().iter().cloned().collect();
+                if rest.is_empty() {
+                    return BlockStep::Done(Block::Lines {
+                        props,
+                        lines: Vec::new(),
+                    });
                 }
+                rest.reverse();
+                let first = rest.pop().expect("non-empty");
+                stack.push(BlockFrame::Seq {
+                    props,
+                    rest,
+                    lines: Vec::new(),
+                });
+                BlockStep::Continue(Node::Owned(first))
             }
             Value::Mapping(entries) => {
-                for (k, v) in entries.borrow().iter() {
-                    let key = self.key(k);
-                    self.push_entry(&mut lines, &key, v);
+                let mut rest: Vec<(Rc<Value>, Rc<Value>)> =
+                    entries.borrow().iter().cloned().collect();
+                if rest.is_empty() {
+                    return BlockStep::Done(Block::Lines {
+                        props,
+                        lines: Vec::new(),
+                    });
                 }
+                rest.reverse();
+                let (k, v) = rest.pop().expect("non-empty");
+                stack.push(BlockFrame::MapKey {
+                    props,
+                    rest,
+                    lines: Vec::new(),
+                    waiting_value: v,
+                });
+                // Keys use flow form (including alias trailing space).
+                BlockStep::Done(Block::Inline(self.flow_node(Node::Owned(k), true)))
             }
             _ => unreachable!("scalars handled above"),
         }
-        Block::Lines { props, lines }
     }
 
-    /// Sequence item: compact nested block (`- - a`, `- k: v`) or inline.
-    fn push_item(&mut self, lines: &mut Vec<String>, item: &Rc<Value>) {
-        match self.block(item) {
+    fn push_item_lines(lines: &mut Vec<String>, item: Block) {
+        match item {
             Block::Inline(text) => lines.push(format!("- {text}")),
             Block::Lines {
                 props: None,
@@ -209,9 +506,8 @@ impl Writer {
         }
     }
 
-    /// Mapping entry: `key: inline` or `key:` followed by an indented block.
-    fn push_entry(&mut self, lines: &mut Vec<String>, key: &str, v: &Rc<Value>) {
-        match self.block(v) {
+    fn push_entry_lines(lines: &mut Vec<String>, key: &str, v: Block) {
+        match v {
             Block::Inline(text) => lines.push(format!("{key}: {text}")),
             Block::Lines {
                 props,
