@@ -1,10 +1,14 @@
-# Longer scheduled fuzz runs. Failures upload artifacts for triage.
+# Longer scheduled fuzz runs. Failures upload artifacts and open a triage issue.
 name: fuzz-nightly
 
 on:
   schedule:
     - cron: "17 4 * * *"
   workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
 
 jobs:
   fuzz:
@@ -21,6 +25,7 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
       - name: Run ${{ matrix.target }} (~15 min)
+        id: fuzz
         run: |
           extra=()
           if [[ "${{ matrix.target }}" == "fuzz_roundtrip" ]]; then
@@ -37,3 +42,19 @@ jobs:
             fuzz/artifacts
             fuzz/corpus/${{ matrix.target }}
           if-no-files-found: ignore
+      - name: Open triage issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="fuzz-nightly crash: ${{ matrix.target }} ($(date -u +%Y-%m-%d))"
+          body=$(cat <<EOF
+          Automated triage from [\`${{ github.workflow }}\` run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+
+          - Target: \`${{ matrix.target }}\`
+          - Artifact: \`fuzz-artifacts-${{ matrix.target }}\` (if uploaded)
+
+          Reproduce locally with the artifact corpus/crash inputs under \`fuzz/artifacts/\`, then triage in \`docs/superpowers/fuzz-findings.md\`.
+          EOF
+          )
+          gh issue create --title "$title" --body "$body" || echo "issue create failed (non-fatal)"

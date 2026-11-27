@@ -14,5 +14,7 @@ fuzz_target!(|data: &[u8]| {
     let Ok(yaml) = to_string(&value) else {
         return;
     };
-    let _ = from_str(&yaml);
+    if from_str(&yaml).is_err() {
+        panic!("emit produced output the parser rejects: {yaml:?}");
+    }
 });
