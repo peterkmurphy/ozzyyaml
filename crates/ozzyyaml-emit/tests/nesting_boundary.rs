@@ -2,7 +2,7 @@
 //! on the platform default stack (debug and release). See fuzz-nightly
 //! finding Nov 2026 (stack overflow at ~7k flow-seq with the old 10_000 default).
 
-use ozzyyaml::{from_str, from_str_with_limits, Limits};
+use ozzyyaml::{from_str, from_str_with_limits, Limits, Value};
 use ozzyyaml_emit::to_string;
 
 fn default_depth() -> usize {
@@ -95,4 +95,50 @@ fn raised_limit_still_overrides() {
     let input = flow_seq(64);
     let v = from_str_with_limits(&input, Limits::default().max_nesting_depth(128)).unwrap();
     let _ = to_string(&v).unwrap();
+}
+
+/// Flatten a tree into empty collections so `Drop` does not recurse (until
+/// iterative `Drop` lands). Safe for the deep emit isolation test.
+fn clear_tree(root: &Value) {
+    use std::rc::Rc;
+    let mut stack: Vec<Rc<Value>> = Vec::new();
+    take_children_into(root, &mut stack);
+    while let Some(node) = stack.pop() {
+        take_children_into(&node, &mut stack);
+        // `node` is now an empty collection / scalar; Drop is shallow.
+    }
+}
+
+fn take_children_into(value: &Value, stack: &mut Vec<std::rc::Rc<Value>>) {
+    match value {
+        Value::Sequence(cell) => {
+            stack.extend(std::mem::take(&mut *cell.borrow_mut()));
+        }
+        Value::Mapping(cell) => {
+            for (k, v) in std::mem::take(&mut *cell.borrow_mut()) {
+                stack.push(k);
+                stack.push(v);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn emit_deep_flow_seq_on_small_stack() {
+    // Part 2 acceptance for emit: Writer + Anchors must not grow stack with depth.
+    const DEPTH: usize = 10_000;
+    const STACK: usize = 1024 * 1024;
+    let handle = std::thread::Builder::new()
+        .stack_size(STACK)
+        .spawn(|| {
+            let input = flow_seq(DEPTH);
+            let value = from_str_with_limits(&input, Limits::default().max_nesting_depth(DEPTH + 1))
+                .expect("compose deep flow-seq");
+            let yaml = to_string(&value).expect("emit deep flow-seq");
+            assert!(yaml.starts_with('['), "unexpected emit: {}", &yaml[..yaml.len().min(32)]);
+            clear_tree(&value);
+        })
+        .expect("spawn");
+    handle.join().expect("emit thread panicked or overflowed");
 }
