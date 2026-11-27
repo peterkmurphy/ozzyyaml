@@ -53,7 +53,14 @@ fn is_special_char(c: char) -> bool {
 }
 
 fn needs_double_quotes(s: &str) -> bool {
-    s.chars().any(is_special_char)
+    s.chars().any(is_special_char) || has_document_marker_line(s)
+}
+
+/// A line that begins with `---` / `...` cannot appear inside a multiline
+/// single-quoted scalar — the scanner treats it as a document marker.
+fn has_document_marker_line(s: &str) -> bool {
+    s.split('\n')
+        .any(|line| line.starts_with("---") || line.starts_with("..."))
 }
 
 fn needs_single_quotes(s: &str) -> bool {
@@ -141,5 +148,14 @@ mod tests {
         let yaml = format_string("x\u{ffff}y");
         let value = ozzyyaml::from_str(&format!("{yaml}\n")).expect("reparse");
         assert_eq!(value, Value::String("x\u{ffff}y".into()));
+    }
+
+    #[test]
+    fn embedded_document_marker_line_uses_double_quotes() {
+        let s = "1\n\n- b\n--- b";
+        assert!(needs_double_quotes(s));
+        let yaml = format!("{}\n", format_string(s));
+        let value = ozzyyaml::from_str(&yaml).expect("reparse");
+        assert_eq!(value, Value::String(s.into()));
     }
 }
