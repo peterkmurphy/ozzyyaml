@@ -32,15 +32,10 @@ pub(crate) fn format_string(s: &str) -> String {
 
 /// YAML 1.2 §5.1 printable characters — everything else needs double-quoted escapes.
 fn is_yaml_non_printable(c: char) -> bool {
-    match c as u32 {
-        0x9 | 0xa | 0xd => false,
-        0x20..=0x7e => false,
-        0x85 => false,
-        0xa0..=0xd7ff => false,
-        0xe000..=0xfffd => false,
-        0x10000..=0x10ffff => false,
-        _ => true,
-    }
+    !matches!(
+        c as u32,
+        0x9 | 0xa | 0xd | 0x20..=0x7e | 0x85 | 0xa0..=0xd7ff | 0xe000..=0xfffd | 0x10000..=0x10ffff
+    )
 }
 
 fn is_special_char(c: char) -> bool {
