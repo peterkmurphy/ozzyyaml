@@ -197,12 +197,6 @@ impl Writer {
         self.flow_node(Node::Borrowed(value), false)
     }
 
-    /// Mapping key text (flow form). A trailing space after an alias keeps
-    /// the `:` from being read as part of the alias name.
-    fn key(&mut self, key: &Value) -> String {
-        self.flow_node(Node::Borrowed(key), true)
-    }
-
     fn maybe_key_space(text: String, as_key: bool) -> String {
         if as_key && text.starts_with('*') {
             format!("{text} ")
