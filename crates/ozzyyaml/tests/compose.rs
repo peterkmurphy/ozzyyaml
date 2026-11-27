@@ -108,7 +108,7 @@ fn redefined_anchor_later_alias_sees_new_value() {
          Reuse anchor: *anchor\n",
     )
     .unwrap();
-    let Value::Mapping(entries) = v else {
+    let Value::Mapping(ref entries) = v else {
         panic!("expected mapping");
     };
     let entries = entries.borrow();

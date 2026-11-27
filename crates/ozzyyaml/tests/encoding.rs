@@ -44,7 +44,7 @@ fn assert_same_as_utf8(bytes: &[u8], utf8: &str) {
 fn utf16le_bom_loads() {
     let bytes = utf16le("a\n");
     let v = from_slice(&bytes).unwrap();
-    assert!(matches!(v, Value::String(s) if s == "a"));
+    assert!(matches!(v, Value::String(ref s) if s == "a"));
 }
 
 #[test]

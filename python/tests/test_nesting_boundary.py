@@ -1,8 +1,11 @@
 """Default nesting depth must survive load_value → dump → load (no segfault)."""
 
+import threading
+
 import ozzyyaml
 
-DEFAULT_DEPTH = 512
+DEFAULT_DEPTH = 10_000
+SMALL_STACK = 1024 * 1024
 
 
 def flow_seq(depth: int) -> str:
@@ -30,6 +33,13 @@ def roundtrip_value(text: str) -> None:
     ozzyyaml.load(dumped)
 
 
+def nested_python_list(depth: int):
+    node = None
+    for _ in range(depth):
+        node = [node]
+    return node
+
+
 def test_flow_seq_at_default_depth():
     roundtrip_value(flow_seq(DEFAULT_DEPTH))
     roundtrip_value(flow_seq(DEFAULT_DEPTH - 1))
@@ -52,3 +62,65 @@ def test_one_past_default_is_error():
             raise AssertionError("expected OzzyYamlError for over-deep nesting")
         except ozzyyaml.OzzyYamlError:
             pass
+
+
+def _on_small_stack(fn):
+    """Run `fn` on a 1 MiB thread so Rust recursion cannot hide behind the default stack."""
+    errors = []
+
+    def target():
+        try:
+            fn()
+        except Exception as exc:  # noqa: BLE001 — surface any failure to the joiner
+            errors.append(exc)
+
+    prev = threading.stack_size(SMALL_STACK)
+    try:
+        thread = threading.Thread(target=target)
+        thread.start()
+        thread.join()
+    finally:
+        threading.stack_size(prev)
+    if thread.is_alive():
+        raise AssertionError("small-stack worker did not finish")
+    if errors:
+        raise errors[0]
+
+
+def test_load_at_default_depth_on_small_stack():
+    def body():
+        data = ozzyyaml.load(flow_seq(DEFAULT_DEPTH))
+        cur = data
+        for _ in range(DEFAULT_DEPTH - 1):
+            assert isinstance(cur, list) and len(cur) == 1
+            cur = cur[0]
+        assert cur == []
+
+    _on_small_stack(body)
+
+
+def test_dump_python_list_at_default_depth_on_small_stack():
+    def body():
+        data = nested_python_list(DEFAULT_DEPTH)
+        text = ozzyyaml.dump(data)
+        assert text.startswith("[")
+        loaded = ozzyyaml.load(text)
+        cur = loaded
+        for _ in range(DEFAULT_DEPTH - 1):
+            assert isinstance(cur, list) and len(cur) == 1
+            cur = cur[0]
+        assert cur == [None]
+
+    _on_small_stack(body)
+
+
+def test_load_flow_map_at_default_depth_on_small_stack():
+    def body():
+        data = ozzyyaml.load(flow_map(DEFAULT_DEPTH))
+        cur = data
+        for _ in range(DEFAULT_DEPTH):
+            assert isinstance(cur, dict) and list(cur.keys()) == ["a"]
+            cur = cur["a"]
+        assert cur == 1
+
+    _on_small_stack(body)

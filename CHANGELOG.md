@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Breaking (behavioral):** default `max_nesting_depth` raised from **512**
+  back to **10 000**. Compose, emit, `Value::Drop`, and the Python converters
+  are now iterative, so nesting is only a DoS/memory guard again. Callers who
+  relied on the 0.2.1 cap rejecting depth ≥ 513 will see those documents
+  accepted under default `Limits`.
+
 ## [0.2.1] — 2026-11-27
 
 ### Fixed

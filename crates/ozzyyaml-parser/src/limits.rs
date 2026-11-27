@@ -14,10 +14,9 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             max_input_bytes: 256 * 1024 * 1024,
-            // Kept low enough that recursive compose/emit/Drop/Python conversion
-            // survive on a typical 8 MiB stack (debug builds). Override for
-            // trusted deep trees; raise again after iterative tree walks (0.3.x).
-            max_nesting_depth: 512,
+            // Tree walks (compose/emit/Drop/Python) are iterative; this is a
+            // DoS/memory guard, not a stack-safety ceiling.
+            max_nesting_depth: 10_000,
             max_anchors: 100_000,
         }
     }
@@ -50,10 +49,10 @@ mod tests {
     use crate::reader::Reader;
 
     #[test]
-    fn default_limits_are_stack_safe() {
+    fn default_limits_match_documented_caps() {
         let l = Limits::default();
         assert_eq!(l.max_input_bytes, 256 * 1024 * 1024);
-        assert_eq!(l.max_nesting_depth, 512);
+        assert_eq!(l.max_nesting_depth, 10_000);
         assert_eq!(l.max_anchors, 100_000);
     }
 

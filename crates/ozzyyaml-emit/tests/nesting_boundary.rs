@@ -1,8 +1,7 @@
-//! Default `max_nesting_depth` must be survivable for parse → emit → drop
-//! on the platform default stack (debug and release). See fuzz-nightly
-//! finding Nov 2026 (stack overflow at ~7k flow-seq with the old 10_000 default).
+//! Default `max_nesting_depth` (10 000) must be survivable for parse → emit →
+//! drop on a small stack now that tree walks are iterative.
 
-use ozzyyaml::{from_str, from_str_with_limits, Limits, Value};
+use ozzyyaml::{from_str, from_str_with_limits, Limits};
 use ozzyyaml_emit::to_string;
 
 fn default_depth() -> usize {
@@ -57,9 +56,8 @@ fn assert_rejected_as_nesting_limit(input: &str) {
 }
 
 #[test]
-fn default_nesting_depth_is_stack_safe() {
-    // Documented hotfix default; keep in sync with parser Limits::default.
-    assert_eq!(default_depth(), 512);
+fn default_nesting_depth_is_ten_thousand() {
+    assert_eq!(default_depth(), 10_000);
 }
 
 #[test]
@@ -97,53 +95,49 @@ fn raised_limit_still_overrides() {
     let _ = to_string(&v).unwrap();
 }
 
-/// Flatten a tree into empty collections so `Drop` does not recurse (until
-/// iterative `Drop` lands). Safe for the deep emit isolation test.
-fn clear_tree(root: &Value) {
-    use std::rc::Rc;
-    let mut stack: Vec<Rc<Value>> = Vec::new();
-    take_children_into(root, &mut stack);
-    while let Some(node) = stack.pop() {
-        take_children_into(&node, &mut stack);
-        // `node` is now an empty collection / scalar; Drop is shallow.
-    }
-}
-
-fn take_children_into(value: &Value, stack: &mut Vec<std::rc::Rc<Value>>) {
-    match value {
-        Value::Sequence(cell) => {
-            stack.extend(std::mem::take(&mut *cell.borrow_mut()));
-        }
-        Value::Mapping(cell) => {
-            for (k, v) in std::mem::take(&mut *cell.borrow_mut()) {
-                stack.push(k);
-                stack.push(v);
-            }
-        }
-        _ => {}
-    }
-}
-
 #[test]
 fn emit_deep_flow_seq_on_small_stack() {
-    // Part 2 acceptance for emit: Writer + Anchors must not grow stack with depth.
+    // Writer + Anchors + Drop must not grow stack with depth.
     const DEPTH: usize = 10_000;
     const STACK: usize = 1024 * 1024;
     let handle = std::thread::Builder::new()
         .stack_size(STACK)
         .spawn(|| {
             let input = flow_seq(DEPTH);
-            let value =
-                from_str_with_limits(&input, Limits::default().max_nesting_depth(DEPTH + 1))
-                    .expect("compose deep flow-seq");
+            let value = from_str(&input).expect("compose at default depth");
             let yaml = to_string(&value).expect("emit deep flow-seq");
             assert!(
                 yaml.starts_with('['),
                 "unexpected emit: {}",
                 &yaml[..yaml.len().min(32)]
             );
-            clear_tree(&value);
+            drop(value);
         })
         .expect("spawn");
     handle.join().expect("emit thread panicked or overflowed");
+}
+
+#[test]
+fn hundred_thousand_deep_on_small_stack_never_crashes() {
+    // Plan Task 6: far past the default — clean LimitExceeded, or success with
+    // an override; never SIGSEGV.
+    const DEPTH: usize = 100_000;
+    const STACK: usize = 1024 * 1024;
+    let handle = std::thread::Builder::new()
+        .stack_size(STACK)
+        .spawn(|| {
+            assert_rejected_as_nesting_limit(&flow_seq(DEPTH));
+            let value = from_str_with_limits(
+                &flow_seq(DEPTH),
+                Limits::default().max_nesting_depth(DEPTH + 1),
+            )
+            .expect("compose with raised limit");
+            let yaml = to_string(&value).expect("emit 100k-deep flow-seq");
+            assert!(yaml.starts_with('['));
+            drop(value);
+        })
+        .expect("spawn");
+    handle
+        .join()
+        .expect("100k-deep thread panicked or overflowed");
 }
