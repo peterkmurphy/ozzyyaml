@@ -17,4 +17,5 @@ pub use compose::{
 };
 pub use error::{Error, Result};
 pub use limits::Limits;
+pub use ozzyyaml_parser::LimitKind;
 pub use value::Value;

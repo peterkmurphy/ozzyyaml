@@ -18,7 +18,10 @@ round-trip emit, with the caveats below.
   UTF-32LE/BE via BOM **and** §5.2 null-pattern detection. String APIs and
   emit remain UTF-8. Mid-document BOM is an error; BOM inside double-quoted
   scalars is allowed
-- Default `Limits`: 256 MiB input, 10 000 nesting, 100 000 anchors (overridable)
+- Default `Limits`: 256 MiB input, **512** nesting, 100 000 anchors (overridable).
+  Nesting is capped so recursive compose/emit/`Drop` (and the Python
+  converters) cannot stack-overflow on an 8 MiB thread; raise via `Limits`
+  only for trusted deep trees until walks are iterative (planned 0.3.x).
 
 ## Honest caveats
 
